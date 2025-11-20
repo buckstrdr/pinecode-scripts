@@ -2,7 +2,7 @@
 // DISCLAIMER: This strategy is provided "as is" for educational and backtesting purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
 strategy('Floating ORB Strategy by BucksTRDR', overlay=true,
          fill_orders_on_standard_ohlc=true,
-         initial_capital=10000,
+         initial_capital=50000,
          default_qty_type=strategy.fixed,
          default_qty_value=1,
          commission_type=strategy.commission.percent,
@@ -75,27 +75,60 @@ if showFailedConditions and strategy.position_size == 0
         debugText := debugText + 'Time: ' + (inTradingWindow ? '✓' : '✗ Outside hours')
         label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.orange, 0), textcolor=color.black, size=size.tiny)
 
-// === ULTRA SIMPLIFIED ENTRY FOR TESTING ===
-// Matching TradingView template exactly - no barstate, no qty parameter
-if (triggerLong)
+// === Track Position State ===
+var float entryPrice = na
+var float currentStopLoss = na
+var int tradeDirection = 0  // 1 = long, -1 = short, 0 = no position
+
+// === Entry Logic ===
+if (triggerLong and strategy.position_size == 0)
+    entryPrice := close
+    currentStopLoss := low
+    tradeDirection := 1
     strategy.entry('Long', strategy.long)
 
-if (triggerShort)
+    if showDebugLabels
+        label.new(bar_index, high, '🟢 LONG ENTRY\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(low, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
+                  style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=size.normal)
+
+if (triggerShort and strategy.position_size == 0)
+    entryPrice := close
+    currentStopLoss := high
+    tradeDirection := -1
     strategy.entry('Short', strategy.short)
 
-// Debug labels separate from entry logic
-if triggerLong and showDebugLabels
-    label.new(bar_index, high, '🟢 LONG ENTRY\nPrice: ' + str.tostring(close, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
-              style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=size.normal)
+    if showDebugLabels
+        label.new(bar_index, low, '🔴 SHORT ENTRY\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(high, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
+                  style=label.style_label_up, color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.normal)
 
-if triggerShort and showDebugLabels
-    label.new(bar_index, low, '🔴 SHORT ENTRY\nPrice: ' + str.tostring(close, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
-              style=label.style_label_up, color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.normal)
+// === Exit Orders (Stop Loss) ===
+if strategy.position_size > 0
+    strategy.exit('Long SL', 'Long', stop=currentStopLoss)
+
+if strategy.position_size < 0
+    strategy.exit('Short SL', 'Short', stop=currentStopLoss)
+
+// === Close Positions Outside Trading Hours ===
+if closeOutsideHours and not inTradingWindow
+    if strategy.position_size > 0
+        strategy.close('Long', comment='Outside Trading Hours')
+    if strategy.position_size < 0
+        strategy.close('Short', comment='Outside Trading Hours')
+
+// === Reset on Position Close ===
+if strategy.position_size == 0 and strategy.position_size[1] != 0
+    entryPrice := na
+    currentStopLoss := na
+    tradeDirection := 0
 
 // === Visual Reference ===
 // Plot entry signals
 plotshape(triggerLong, title='Long Trigger', style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.small)
 plotshape(triggerShort, title='Short Trigger', style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.small)
+
+// Plot stop loss and entry lines
+plot(strategy.position_size != 0 ? currentStopLoss : na, title='Stop Loss', color=color.red, linewidth=2, style=plot.style_linebr)
+plot(strategy.position_size != 0 ? entryPrice : na, title='Entry Price', color=color.blue, linewidth=1, style=plot.style_linebr)
 
 // === Volume & Position Reference ===
 bgcolor(volumeCondition ? color.new(color.blue, 95) : na, title='High Volume Background')
