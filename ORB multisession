@@ -1,4 +1,4 @@
-/@version=6
+//@version=6
 // DISCLAIMER: This indicator is provided "as is" for educational purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
 indicator('ORB Multi-Session with TP Targets by BucksTRDR', overlay=true)
 
