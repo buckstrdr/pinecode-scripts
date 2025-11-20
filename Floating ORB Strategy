@@ -20,12 +20,21 @@ minTrailCandleSize = input.float(3.0, title='Min Candle Size for Trailing (point
 tickOffset = input.float(2.0, title='Tick Offset for First SL Move', minval=0, step=0.5, group='Stop Loss Settings', tooltip='Offset in ticks for first stop loss move (to cover fees)')
 
 // === Take Profit & Scaling Settings ===
-enableFixedTP = input.bool(true, title='Enable Fixed Take Profit', group='Take Profit', tooltip='Use fixed 3:1 reward-risk take profit')
-tpRatio = input.float(3.0, title='Take Profit Ratio', minval=1.0, step=0.5, group='Take Profit', tooltip='Reward-risk ratio for take profit (e.g., 3.0 = 3:1)')
-scaleOutPercent = input.float(50.0, title='Scale Out % at TP', minval=10, maxval=90, step=10, group='Take Profit', tooltip='Percentage of position to close at take profit')
+enableFixedTP = input.bool(true, title='Enable Fixed Take Profit', group='Take Profit', tooltip='Use fixed 4:1 reward-risk take profit')
+tpRatio = input.float(4.0, title='Take Profit Ratio', minval=1.0, step=0.5, group='Take Profit', tooltip='Reward-risk ratio for take profit (e.g., 4.0 = 4:1)')
+scaleOutPercent = input.float(25.0, title='Scale Out % at TP', minval=10, maxval=90, step=5, group='Take Profit', tooltip='Percentage of position to close at take profit')
+
+// === Consecutive Loss Protection ===
+enableLossFilter = input.bool(true, title='Enable Loss Filter', group='Risk Management', tooltip='Stop trading after consecutive losses')
+maxConsecutiveLosses = input.int(3, title='Max Consecutive Losses', minval=1, maxval=10, group='Risk Management', tooltip='Stop trading after this many losses in a row')
+
+// === ATR Volatility Filter ===
+enableATRFilter = input.bool(true, title='Enable ATR Filter', group='Volatility Filter', tooltip='Only trade when market has sufficient volatility')
+atrLength = input.int(14, title='ATR Length', minval=1, group='Volatility Filter', tooltip='Length for ATR calculation')
+minATR = input.float(15.0, title='Min ATR for Entry', minval=1.0, step=1.0, group='Volatility Filter', tooltip='Minimum ATR value required to enter trades')
 
 // === Trend Filter Inputs ===
-enableTrendFilter = input.bool(true, title='Enable Trend Filter', group='Trend Filter', tooltip='Only trade in direction of trend')
+enableTrendFilter = input.bool(false, title='Enable Trend Filter', group='Trend Filter', tooltip='Only trade in direction of trend')
 trendEMALength = input.int(200, title='Trend EMA Length', minval=1, group='Trend Filter', tooltip='EMA length for trend direction (e.g., 200)')
 
 // === Time Filter Inputs ===
@@ -72,10 +81,29 @@ isChoppyHour = enableChoppyFilter and currentHour >= choppyStartHour and current
 volumeMA = ta.sma(volume, volumeMALength)
 volumeCondition = volume >= volumeMultiplier * volumeMA
 
+// === ATR Volatility Calculations ===
+atr = ta.atr(atrLength)
+atrCondition = not enableATRFilter or atr >= minATR
+
 // === Trend Filter Calculations ===
 trendEMA = ta.ema(close, trendEMALength)
 inUptrend = close > trendEMA
 inDowntrend = close < trendEMA
+
+// === Consecutive Loss Tracking ===
+var int consecutiveLosses = 0
+var float lastNetProfit = 0.0
+
+// Update consecutive losses after position closes
+if strategy.position_size == 0 and strategy.position_size[1] != 0
+    if strategy.netprofit < lastNetProfit
+        consecutiveLosses := consecutiveLosses + 1
+    else
+        consecutiveLosses := 0
+    lastNetProfit := strategy.netprofit
+
+// Check if we're allowed to trade (not over loss limit)
+allowedToTrade = not enableLossFilter or consecutiveLosses < maxConsecutiveLosses
 
 // === Candle Calculations ===
 candleRange = high - low
@@ -89,8 +117,8 @@ validCandleRange = candleRange >= minCandleRange and candleRange <= maxCandleRan
 trendAllowsLong = not enableTrendFilter or inUptrend
 trendAllowsShort = not enableTrendFilter or inDowntrend
 
-triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange and inTradingWindow and trendAllowsLong and not isChoppyHour and not tooCloseToEOD
-triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange and inTradingWindow and trendAllowsShort and not isChoppyHour and not tooCloseToEOD
+triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange and inTradingWindow and trendAllowsLong and not isChoppyHour and not tooCloseToEOD and atrCondition and allowedToTrade
+triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange and inTradingWindow and trendAllowsShort and not isChoppyHour and not tooCloseToEOD and atrCondition and allowedToTrade
 
 // === Debug Failed Conditions ===
 if showFailedConditions and strategy.position_size == 0
@@ -106,6 +134,8 @@ if showFailedConditions and strategy.position_size == 0
         debugText := debugText + 'Range: ' + (validCandleRange ? '✓' : '✗ ' + str.tostring(candleRange, '#.##') + ' pts') + '\n'
         debugText := debugText + 'Min: ' + str.tostring(minCandleRange, '#.#') + ' Max: ' + str.tostring(maxCandleRange, '#.#') + '\n'
         debugText := debugText + 'Trend: ' + (trendAllowsLong ? '✓' : '✗ Below EMA') + '\n'
+        debugText := debugText + 'ATR: ' + (atrCondition ? '✓' : '✗ ATR=' + str.tostring(atr, '#.#')) + '\n'
+        debugText := debugText + 'Losses: ' + (allowedToTrade ? '✓' : '✗ ' + str.tostring(consecutiveLosses) + ' in row') + '\n'
         debugText := debugText + 'Choppy: ' + (not isChoppyHour ? '✓' : '✗ Choppy hours') + '\n'
         debugText := debugText + 'EOD: ' + (not tooCloseToEOD ? '✓' : '✗ Too close to EOD') + '\n'
         debugText := debugText + 'Time: ' + (inTradingWindow ? '✓' : '✗ Outside hours')
@@ -119,6 +149,8 @@ if showFailedConditions and strategy.position_size == 0
         debugText := debugText + 'Range: ' + (validCandleRange ? '✓ ' : '✗ ' + str.tostring(candleRange, '#.##') + ' pts') + '\n'
         debugText := debugText + 'Min: ' + str.tostring(minCandleRange, '#.#') + ' Max: ' + str.tostring(maxCandleRange, '#.#') + '\n'
         debugText := debugText + 'Trend: ' + (trendAllowsShort ? '✓' : '✗ Above EMA') + '\n'
+        debugText := debugText + 'ATR: ' + (atrCondition ? '✓' : '✗ ATR=' + str.tostring(atr, '#.#')) + '\n'
+        debugText := debugText + 'Losses: ' + (allowedToTrade ? '✓' : '✗ ' + str.tostring(consecutiveLosses) + ' in row') + '\n'
         debugText := debugText + 'Choppy: ' + (not isChoppyHour ? '✓' : '✗ Choppy hours') + '\n'
         debugText := debugText + 'EOD: ' + (not tooCloseToEOD ? '✓' : '✗ Too close to EOD') + '\n'
         debugText := debugText + 'Time: ' + (inTradingWindow ? '✓' : '✗ Outside hours')
@@ -294,3 +326,9 @@ plot(enableTrendFilter ? trendEMA : na, title='Trend EMA', color=color.new(color
 
 // === Volume Reference ===
 bgcolor(volumeCondition ? color.new(color.blue, 95) : na, title='High Volume Background')
+
+// === Warning: Trading Paused ===
+bgcolor(not allowedToTrade ? color.new(color.red, 80) : na, title='Trading Paused - Consecutive Losses')
+
+// Plot ATR for reference
+plot(enableATRFilter ? atr : na, title='ATR', color=color.new(color.orange, 0), linewidth=1)
