@@ -25,21 +25,24 @@ ema50_period = input.int(50, "50 EMA Period", minval=1, group="EMA Settings")
 // ATR Settings
 atr_period = input.int(14, "ATR Period", minval=1, group="ATR Settings")
 
+// Relaxed Mode
+use_relaxed_mode = input.bool(false, "Use Relaxed Mode (Easier Entries)", group="Trend Thresholds", tooltip="Uses looser thresholds for more frequent trades")
+
 // Trend Slope Thresholds (normalized by ATR)
-slope10_threshold = input.float(2.0, "10 EMA Slope Threshold", step=0.1, group="Trend Thresholds")
-slope20_threshold = input.float(1.5, "20 EMA Slope Threshold", step=0.1, group="Trend Thresholds")
-slope50_threshold = input.float(1.0, "50 EMA Slope Threshold", step=0.1, group="Trend Thresholds")
+slope10_threshold = use_relaxed_mode ? 0.5 : input.float(2.0, "10 EMA Slope Threshold", step=0.1, group="Trend Thresholds")
+slope20_threshold = use_relaxed_mode ? 0.3 : input.float(1.5, "20 EMA Slope Threshold", step=0.1, group="Trend Thresholds")
+slope50_threshold = use_relaxed_mode ? 0.2 : input.float(1.0, "50 EMA Slope Threshold", step=0.1, group="Trend Thresholds")
 
 // EMA Separation Thresholds (percentage)
-sep_10_20_threshold = input.float(0.15, "10-20 EMA Separation %", step=0.01, group="Trend Thresholds")
-sep_20_50_threshold = input.float(0.25, "20-50 EMA Separation %", step=0.01, group="Trend Thresholds")
+sep_10_20_threshold = use_relaxed_mode ? 0.05 : input.float(0.15, "10-20 EMA Separation %", step=0.01, group="Trend Thresholds")
+sep_20_50_threshold = use_relaxed_mode ? 0.10 : input.float(0.25, "20-50 EMA Separation %", step=0.01, group="Trend Thresholds")
 
 // Fog Zone Thresholds
-fog_sep_10_20 = input.float(0.1, "Fog Zone 10-20 Separation %", step=0.01, group="Trend Thresholds")
-fog_sep_20_50 = input.float(0.15, "Fog Zone 20-50 Separation %", step=0.01, group="Trend Thresholds")
+fog_sep_10_20 = use_relaxed_mode ? 0.03 : input.float(0.1, "Fog Zone 10-20 Separation %", step=0.01, group="Trend Thresholds")
+fog_sep_20_50 = use_relaxed_mode ? 0.05 : input.float(0.15, "Fog Zone 20-50 Separation %", step=0.01, group="Trend Thresholds")
 
 // Pullback Detection
-pullback_tolerance = input.float(0.2, "Pullback Touch Tolerance %", step=0.01, group="Entry Settings")
+pullback_tolerance = use_relaxed_mode ? 0.5 : input.float(0.2, "Pullback Touch Tolerance %", step=0.01, group="Entry Settings")
 
 // Profit Targets and Stop Loss (for NQ futures)
 target_ticks = input.int(40, "Target (Ticks)", minval=1, group="Exit Settings", tooltip="40 ticks = $200 for NQ")
@@ -50,11 +53,15 @@ max_trades_per_day = input.int(5, "Max Trades Per Day", minval=1, group="Risk Ma
 max_consecutive_losses = input.int(2, "Max Consecutive Losses", minval=1, group="Risk Management")
 
 // Trading Time Filter (EST)
-use_time_filter = input.bool(true, "Use Time Filter", group="Time Filter")
+use_time_filter = input.bool(false, "Use Time Filter", group="Time Filter", tooltip="Disable for 24/7 trading. Enable to restrict to specific hours.")
 start_hour = input.int(9, "Start Hour (EST)", minval=0, maxval=23, group="Time Filter")
 start_minute = input.int(30, "Start Minute", minval=0, maxval=59, group="Time Filter")
-end_hour = input.int(11, "End Hour (EST)", minval=0, maxval=23, group="Time Filter")
+end_hour = input.int(16, "End Hour (EST)", minval=0, maxval=23, group="Time Filter")
 end_minute = input.int(0, "End Minute", minval=0, maxval=59, group="Time Filter")
+
+// Debug Mode
+show_debug = input.bool(true, "Show Debug Markers", group="Debug")
+show_pullback_markers = input.bool(true, "Show Pullback Touch Markers", group="Debug")
 
 // ============================================================================
 // CORE INDICATORS
@@ -295,6 +302,10 @@ plotshape(series=long_condition, title="Long Signal", style=shape.triangleup, lo
 
 plotshape(series=short_condition, title="Short Signal", style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.small, text="SHORT")
 
+// Debug markers
+plotshape(series=show_pullback_markers and pullback_touched and uptrend, title="Pullback Touch (Long)", style=shape.circle, location=location.belowbar, color=color.new(color.aqua, 50), size=size.tiny)
+plotshape(series=show_pullback_markers and pullback_touched and downtrend, title="Rally Touch (Short)", style=shape.circle, location=location.abovebar, color=color.new(color.orange, 50), size=size.tiny)
+
 // Plot position levels (entry, target, stop)
 plot(strategy.position_size != 0 ? entry_price : na, "Entry Price", color=color.new(color.yellow, 0), style=plot.style_linebr, linewidth=2)
 
@@ -317,7 +328,7 @@ profit_factor = strategy.grossloss > 0 ? strategy.grossprofit / strategy.grosslo
 // ============================================================================
 
 // Create table in top-right corner
-var table info_table = table.new(position.top_right, 2, 8, border_width=1, border_color=color.gray, frame_width=1, frame_color=color.gray)
+var table info_table = table.new(position.top_right, 2, 12, border_width=1, border_color=color.gray, frame_width=1, frame_color=color.gray)
 
 // Update table (only on last bar to avoid performance issues)
 if barstate.islast
@@ -354,6 +365,25 @@ if barstate.islast
     // Trades Today
     table.cell(info_table, 0, 7, "Trades Today", text_size=size.small)
     table.cell(info_table, 1, 7, str.tostring(trades_today), text_size=size.small)
+
+    // Debug info (if enabled)
+    if show_debug
+        // Total Trades
+        table.cell(info_table, 0, 8, "Total Trades", text_size=size.small)
+        table.cell(info_table, 1, 8, str.tostring(total_trades), text_size=size.small)
+
+        // In Trading Hours
+        table.cell(info_table, 0, 9, "In Hours", text_size=size.small)
+        table.cell(info_table, 1, 9, in_trading_hours ? "YES" : "NO", bgcolor=in_trading_hours ? color.new(color.green, 80) : color.new(color.red, 80), text_size=size.small)
+
+        // Can Trade
+        table.cell(info_table, 0, 10, "Can Trade", text_size=size.small)
+        table.cell(info_table, 1, 10, can_trade ? "YES" : "NO", bgcolor=can_trade ? color.new(color.green, 80) : color.new(color.red, 80), text_size=size.small)
+
+        // Pullback Detected
+        table.cell(info_table, 0, 11, "Pullback", text_size=size.small)
+        pullback_status = in_pullback_long ? "LONG" : in_pullback_short ? "SHORT" : "NONE"
+        table.cell(info_table, 1, 11, pullback_status, text_size=size.small)
 
 // ============================================================================
 // ALERT CONDITIONS
