@@ -108,67 +108,9 @@ if triggerShort and strategy.position_size == 0
         label.new(bar_index, low, '🔴 SHORT ENTRY CALLED\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(high, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
                   style=label.style_label_up, color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.normal)
 
-// === Trailing Stop Logic (TEMPORARILY DISABLED FOR TESTING) ===
-// Uncomment after confirming basic entries work
-/*
-if strategy.position_size > 0  // Long position
-    // Check if candle continues in our direction and meets minimum size
-    candleContinues = close > lastCandleClose
-    candleMeetsMinSize = candleRange >= minTrailCandleSize
-
-    if candleContinues and candleMeetsMinSize
-        // Calculate new stop loss
-        if firstTrailMove
-            // First move: add tick offset for fees
-            currentStopLoss := lastCandleClose + (tickOffset * syminfo.mintick)
-            firstTrailMove := false
-
-            if showDebugLabels
-                label.new(bar_index, low, '📈 1st Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick) + '\n(+' + str.tostring(tickOffset) + ' ticks)',
-                          style=label.style_label_up, color=color.blue, textcolor=color.white, size=size.tiny)
-        else
-            // Subsequent moves: just use previous candle close
-            currentStopLoss := lastCandleClose
-
-            if showDebugLabels
-                label.new(bar_index, low, '📈 Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick),
-                          style=label.style_label_up, color=color.aqua, textcolor=color.black, size=size.tiny)
-
-    // Update last candle close for next bar
-    lastCandleClose := close
-
-    // Apply stop loss
-    strategy.exit('Long Exit', 'Long', stop=currentStopLoss)
-
-if strategy.position_size < 0  // Short position
-    // Check if candle continues in our direction and meets minimum size
-    candleContinues = close < lastCandleClose
-    candleMeetsMinSize = candleRange >= minTrailCandleSize
-
-    if candleContinues and candleMeetsMinSize
-        // Calculate new stop loss
-        if firstTrailMove
-            // First move: subtract tick offset for fees
-            currentStopLoss := lastCandleClose - (tickOffset * syminfo.mintick)
-            firstTrailMove := false
-
-            if showDebugLabels
-                label.new(bar_index, high, '📉 1st Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick) + '\n(-' + str.tostring(tickOffset) + ' ticks)',
-                          style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.tiny)
-        else
-            // Subsequent moves: just use previous candle close
-            currentStopLoss := lastCandleClose
-
-            if showDebugLabels
-                label.new(bar_index, high, '📉 Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick),
-                          style=label.style_label_down, color=color.orange, textcolor=color.black, size=size.tiny)
-
-    // Update last candle close for next bar
-    lastCandleClose := close
-
-    // Apply stop loss
-    strategy.exit('Short Exit', 'Short', stop=currentStopLoss)
-*/
+// === Trailing Stop Logic DISABLED FOR TESTING ===
+// Basic strategy: Entry + Fixed Stop Loss only
+// Trailing logic will be added back after confirming basic execution works
 
 // === Close Positions Outside Trading Hours ===
 if closeOutsideHours and not inTradingWindow
