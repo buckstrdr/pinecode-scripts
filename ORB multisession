@@ -376,6 +376,31 @@ if is5min and show1
 plotshape(long1,  title='Long ORB1',  style=shape.triangleup,   location=location.abovebar, color=color.green, size=size.tiny)
 plotshape(short1, title='Short ORB1', style=shape.triangledown, location=location.belowbar, color=color.red,   size=size.tiny)
 
+// Session 1 Alerts
+if long1
+    alertMessage = sess1Label + ' LONG BREAKOUT\n' +
+                   'Price: ' + str.tostring(close, format.mintick) + '\n' +
+                   'OR High: ' + str.tostring(orb_high1, format.mintick) + '\n' +
+                   'OR Low: ' + str.tostring(orb_low1, format.mintick) + '\n' +
+                   'Range: ' + str.tostring(delta1, format.mintick) + ' pts\n' +
+                   'TP1: ' + str.tostring(orb_high1 + tp1Multiplier * delta1, format.mintick) + '\n' +
+                   'TP2: ' + str.tostring(orb_high1 + tp2Multiplier * delta1, format.mintick) + '\n' +
+                   'TP3: ' + str.tostring(orb_high1 + tp3Multiplier * delta1, format.mintick) + '\n' +
+                   'Volume: ' + str.tostring(volume/volumeMA, '#.##') + 'x MA'
+    alert(alertMessage, alert.freq_once_per_bar)
+
+if short1
+    alertMessage = sess1Label + ' SHORT BREAKOUT\n' +
+                   'Price: ' + str.tostring(close, format.mintick) + '\n' +
+                   'OR High: ' + str.tostring(orb_high1, format.mintick) + '\n' +
+                   'OR Low: ' + str.tostring(orb_low1, format.mintick) + '\n' +
+                   'Range: ' + str.tostring(delta1, format.mintick) + ' pts\n' +
+                   'TP1: ' + str.tostring(orb_low1 - tp1Multiplier * delta1, format.mintick) + '\n' +
+                   'TP2: ' + str.tostring(orb_low1 - tp2Multiplier * delta1, format.mintick) + '\n' +
+                   'TP3: ' + str.tostring(orb_low1 - tp3Multiplier * delta1, format.mintick) + '\n' +
+                   'Volume: ' + str.tostring(volume/volumeMA, '#.##') + 'x MA'
+    alert(alertMessage, alert.freq_once_per_bar)
+
 // Session 2 signals
 long2Breakout = (close - orb_high2) >= (breakoutThreshold * delta2)
 short2Breakout = (orb_low2 - close) >= (breakoutThreshold * delta2)
@@ -404,6 +429,31 @@ if is5min and show2
 
 plotshape(long2,  title='Long ORB2',  style=shape.triangleup,   location=location.abovebar, color=color.blue,  size=size.tiny)
 plotshape(short2, title='Short ORB2', style=shape.triangledown, location=location.belowbar, color=color.orange,size=size.tiny)
+
+// Session 2 Alerts
+if long2
+    alertMessage = sess2Label + ' LONG BREAKOUT\n' +
+                   'Price: ' + str.tostring(close, format.mintick) + '\n' +
+                   'OR High: ' + str.tostring(orb_high2, format.mintick) + '\n' +
+                   'OR Low: ' + str.tostring(orb_low2, format.mintick) + '\n' +
+                   'Range: ' + str.tostring(delta2, format.mintick) + ' pts\n' +
+                   'TP1: ' + str.tostring(orb_high2 + tp1Multiplier * delta2, format.mintick) + '\n' +
+                   'TP2: ' + str.tostring(orb_high2 + tp2Multiplier * delta2, format.mintick) + '\n' +
+                   'TP3: ' + str.tostring(orb_high2 + tp3Multiplier * delta2, format.mintick) + '\n' +
+                   'Volume: ' + str.tostring(volume/volumeMA, '#.##') + 'x MA'
+    alert(alertMessage, alert.freq_once_per_bar)
+
+if short2
+    alertMessage = sess2Label + ' SHORT BREAKOUT\n' +
+                   'Price: ' + str.tostring(close, format.mintick) + '\n' +
+                   'OR High: ' + str.tostring(orb_high2, format.mintick) + '\n' +
+                   'OR Low: ' + str.tostring(orb_low2, format.mintick) + '\n' +
+                   'Range: ' + str.tostring(delta2, format.mintick) + ' pts\n' +
+                   'TP1: ' + str.tostring(orb_low2 - tp1Multiplier * delta2, format.mintick) + '\n' +
+                   'TP2: ' + str.tostring(orb_low2 - tp2Multiplier * delta2, format.mintick) + '\n' +
+                   'TP3: ' + str.tostring(orb_low2 - tp3Multiplier * delta2, format.mintick) + '\n' +
+                   'Volume: ' + str.tostring(volume/volumeMA, '#.##') + 'x MA'
+    alert(alertMessage, alert.freq_once_per_bar)
 
 // Session 3 signals
 long3Breakout = (close - orb_high3) >= (breakoutThreshold * delta3)
@@ -434,34 +484,81 @@ if is5min and show3
 plotshape(long3,  title='Long ORB3',  style=shape.triangleup,   location=location.abovebar, color=color.purple,size=size.tiny)
 plotshape(short3, title='Short ORB3', style=shape.triangledown, location=location.belowbar, color=color.yellow,size=size.tiny)
 
-// === RUBBER BAND STEP 6: Add proper reversal checks ===
-testRubberBand = false
+// Session 3 Alerts
+if long3
+    alertMessage = sess3Label + ' LONG BREAKOUT\n' +
+                   'Price: ' + str.tostring(close, format.mintick) + '\n' +
+                   'OR High: ' + str.tostring(orb_high3, format.mintick) + '\n' +
+                   'OR Low: ' + str.tostring(orb_low3, format.mintick) + '\n' +
+                   'Range: ' + str.tostring(delta3, format.mintick) + ' pts\n' +
+                   'TP1: ' + str.tostring(orb_high3 + tp1Multiplier * delta3, format.mintick) + '\n' +
+                   'TP2: ' + str.tostring(orb_high3 + tp2Multiplier * delta3, format.mintick) + '\n' +
+                   'TP3: ' + str.tostring(orb_high3 + tp3Multiplier * delta3, format.mintick) + '\n' +
+                   'Volume: ' + str.tostring(volume/volumeMA, '#.##') + 'x MA'
+    alert(alertMessage, alert.freq_once_per_bar)
 
-// Test: volume + ORB signal + actual reversal
+if short3
+    alertMessage = sess3Label + ' SHORT BREAKOUT\n' +
+                   'Price: ' + str.tostring(close, format.mintick) + '\n' +
+                   'OR High: ' + str.tostring(orb_high3, format.mintick) + '\n' +
+                   'OR Low: ' + str.tostring(orb_low3, format.mintick) + '\n' +
+                   'Range: ' + str.tostring(delta3, format.mintick) + ' pts\n' +
+                   'TP1: ' + str.tostring(orb_low3 - tp1Multiplier * delta3, format.mintick) + '\n' +
+                   'TP2: ' + str.tostring(orb_low3 - tp2Multiplier * delta3, format.mintick) + '\n' +
+                   'TP3: ' + str.tostring(orb_low3 - tp3Multiplier * delta3, format.mintick) + '\n' +
+                   'Volume: ' + str.tostring(volume/volumeMA, '#.##') + 'x MA'
+    alert(alertMessage, alert.freq_once_per_bar)
+
+// === RUBBER BAND REVERSAL SIGNALS: Directional ===
+rubberBandLong = false
+rubberBandShort = false
+
+// Rubber band logic: fade the breakout when it reverses with volume
 if enableRubberBand and is5min and volume >= rbVolumeMultiplier * volumeMA
     // Check for previous ORB signals
     prevOrbLong = long1[1] or long2[1] or long3[1]
     prevOrbShort = short1[1] or short2[1] or short3[1]
-    
+
     if prevOrbLong or prevOrbShort
         // Calculate reversal metrics
         prevCandleRange = high[1] - low[1]
         reversalThreshold = rbReversalPercent / 100.0
-        
+
         if prevCandleRange > 0
-            // After LONG ORB: look for pullback DOWN (close below previous low + reversal%)
+            // After LONG ORB breakout: if price reverses DOWN = RUBBER BAND SHORT signal
             if prevOrbLong
                 pullbackAmount = high[1] - close  // How much we pulled back from prev high
                 if pullbackAmount >= (reversalThreshold * prevCandleRange)
-                    testRubberBand := true
-            
-            // After SHORT ORB: look for bounce UP (close above previous high - reversal%)  
+                    rubberBandShort := true
+
+            // After SHORT ORB breakout: if price reverses UP = RUBBER BAND LONG signal
             if prevOrbShort
                 bounceAmount = close - low[1]  // How much we bounced from prev low
                 if bounceAmount >= (reversalThreshold * prevCandleRange)
-                    testRubberBand := true
+                    rubberBandLong := true
 
-plotshape(testRubberBand, title='Rubber Band Flag', style=shape.xcross, location=location.abovebar, color=color.new(color.yellow, 0), size=size.tiny)
+// Plot rubber band signals
+plotshape(rubberBandLong, title='Rubber Band Long', style=shape.circle, location=location.belowbar, color=color.new(color.lime, 0), size=size.small)
+plotshape(rubberBandShort, title='Rubber Band Short', style=shape.circle, location=location.abovebar, color=color.new(color.fuchsia, 0), size=size.small)
+
+// Rubber Band Alerts
+if rubberBandLong
+    alertMessage = '🔄 RUBBER BAND LONG (Reversal)\n' +
+                   'Price: ' + str.tostring(close, format.mintick) + '\n' +
+                   'Previous breakout REVERSED\n' +
+                   'Reversal: ' + str.tostring(rbReversalPercent) + '% of prev candle\n' +
+                   'Volume: ' + str.tostring(volume/volumeMA, '#.##') + 'x MA\n' +
+                   'Strategy: Counter-trend entry'
+    alert(alertMessage, alert.freq_once_per_bar)
+
+if rubberBandShort
+    alertMessage = '🔄 RUBBER BAND SHORT (Reversal)\n' +
+                   'Price: ' + str.tostring(close, format.mintick) + '\n' +
+                   'Previous breakout REVERSED\n' +
+                   'Reversal: ' + str.tostring(rbReversalPercent) + '% of prev candle\n' +
+                   'Volume: ' + str.tostring(volume/volumeMA, '#.##') + 'x MA\n' +
+                   'Strategy: Counter-trend entry'
+    alert(alertMessage, alert.freq_once_per_bar)
 
 // === VWAP & EMAs ===
 vwapLine = ta.vwap(close)
