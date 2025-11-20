@@ -173,48 +173,6 @@ volumeMA = ta.sma(volume, volumeMALength)
 volumeCondition = volume >= volumeMultiplier * volumeMA
 breakoutThreshold = breakoutPercent / 100.0
 
-// === Track current session values for shading ===
-var color currShadeColor = na
-var float currORBHigh = na
-var float currORBLow = na
-
-if sess1Enable and is_first1
-    currShadeColor := color.new(sess1ShadeColor, shadeTransp)
-    currORBHigh := orb_high1
-    currORBLow := orb_low1
-else if sess2Enable and is_first2
-    currShadeColor := color.new(sess2ShadeColor, shadeTransp)
-    currORBHigh := orb_high2
-    currORBLow := orb_low2
-else if sess3Enable and is_first3
-    currShadeColor := color.new(sess3ShadeColor, shadeTransp)
-    currORBHigh := orb_high3
-    currORBLow := orb_low3
-
-// Update values during active sessions
-if sess1Enable and in_session1 and show1
-    currORBHigh := orb_high1
-    currORBLow := orb_low1
-else if sess2Enable and in_session2 and show2
-    currORBHigh := orb_high2
-    currORBLow := orb_low2
-else if sess3Enable and in_session3 and show3
-    currORBHigh := orb_high3
-    currORBLow := orb_low3
-
-// Reset shading when sessions end
-if is_end1 or is_end2 or is_end3
-    currORBHigh := na
-    currORBLow := na
-
-// === ORB Shading ===
-show_any_session = show1 or show2 or show3
-p_high_shade = shadeEnable and show_any_session ? currORBHigh : na
-p_low_shade  = shadeEnable and show_any_session ? currORBLow  : na
-ph = plot(p_high_shade, title='ORB Shade High', display=display.none)
-pl = plot(p_low_shade,  title='ORB Shade Low',  display=display.none)
-fill(ph, pl, color=currShadeColor)
-
 // === Session Display & Labels ===
 
 if sess1Enable and is_first1
