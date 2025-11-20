@@ -518,39 +518,5 @@ if rubberBandShort
                    'Strategy: Counter-trend entry'
     alert(alertMessage, alert.freq_once_per_bar)
 
-// === Alert Conditions for TradingView Alert Dialog ===
-alertcondition(long1, title='Session 1 Long Breakout', message='{{ticker}} - Session 1 LONG breakout signal!')
-alertcondition(short1, title='Session 1 Short Breakout', message='{{ticker}} - Session 1 SHORT breakout signal!')
-alertcondition(long2, title='Session 2 Long Breakout', message='{{ticker}} - Session 2 LONG breakout signal!')
-alertcondition(short2, title='Session 2 Short Breakout', message='{{ticker}} - Session 2 SHORT breakout signal!')
-alertcondition(long3, title='Session 3 Long Breakout', message='{{ticker}} - Session 3 LONG breakout signal!')
-alertcondition(short3, title='Session 3 Short Breakout', message='{{ticker}} - Session 3 SHORT breakout signal!')
-alertcondition(rubberBandLong, title='Rubber Band Long', message='{{ticker}} - RUBBER BAND LONG reversal signal!')
-alertcondition(rubberBandShort, title='Rubber Band Short', message='{{ticker}} - RUBBER BAND SHORT reversal signal!')
-alertcondition(long1 or short1 or long2 or short2 or long3 or short3, title='Any ORB Breakout', message='{{ticker}} - ORB Breakout detected!')
-alertcondition(rubberBandLong or rubberBandShort, title='Any Rubber Band Signal', message='{{ticker}} - Rubber Band reversal detected!')
-
-// === VWAP & EMAs ===
-vwapLine = ta.vwap(close)
-plot(vwapLine, title='VWAP', color=vwapColor, linewidth=5)
-ema1   = ta.ema(close, ema1Length)
-ema2   = ta.ema(close, ema2Length)
-plot(ema1,  title='EMA 1',  color=ema1Color,  linewidth=2)
-plot(ema2,  title='EMA 2', color=ema2Color,   linewidth=2)
-
-// === VWAP & EMA Labels ===
-var label vwapLabel = na
-var label ema1Label = na  
-var label ema2Label = na
-
-if barstate.islast
-    if not na(vwapLabel)
-        label.delete(vwapLabel)
-    if not na(ema1Label)
-        label.delete(ema1Label)
-    if not na(ema2Label)
-        label.delete(ema2Label)
-    
-    vwapLabel := label.new(bar_index + 1, vwapLine, text='VWAP', style=label.style_label_left, color=vwapColor, textcolor=vwapTextColor, size=size.tiny)
-    ema1Label := label.new(bar_index + 1, ema1, text='EMA ' + str.tostring(ema1Length), style=label.style_label_left, color=ema1Color, textcolor=ema1TextColor, size=size.tiny)
-    ema2Label := label.new(bar_index + 1, ema2, text='EMA ' + str.tostring(ema2Length), style=label.style_label_left, color=ema2Color, textcolor=ema2TextColor, size=size.tiny)
+// === VWAP & EMAs REMOVED to reduce plot count ===
+// To add VWAP or EMAs as separate indicators, use TradingView's built-in indicators
