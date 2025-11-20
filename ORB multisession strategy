@@ -5,6 +5,7 @@ strategy('ORB Multi-Session Strategy by BucksTRDR', overlay=true, initial_capita
 // === Strategy Settings ===
 stopLossMultiplier = input.float(1.0, title='Stop Loss Multiplier', minval=0.1, step=0.1, tooltip='Stop loss as multiple of OR range (e.g., 1.0 = 1x range)')
 maxTradesPerSession = input.int(1, title='Max Trades Per Session', minval=1, maxval=10, tooltip='Maximum number of trades allowed per session')
+maxLossesPerSession = input.int(1, title='Max Losses Per Session', minval=1, maxval=5, tooltip='Stop trading after this many losing trades per session')
 
 // === ORB Settings ===
 orbTotalTime = input.int(5, title='ORB total time (minutes)')
@@ -77,6 +78,12 @@ var int session1TradeCount = 0
 var int session2TradeCount = 0
 var int session3TradeCount = 0
 
+// === Loss Counter Per Session ===
+var int session1LossCount = 0
+var int session2LossCount = 0
+var int session3LossCount = 0
+var int prevClosedTrades = 0  // Track number of closed trades to detect new closures
+
 // === Position Tracking for Stop Management ===
 var float entryPrice = na
 var float tp2Level = na
@@ -92,6 +99,7 @@ if sess1Enable
         orb_high1 := high
         orb_low1 := low
         session1TradeCount := 0  // Reset trade counter
+        session1LossCount := 0   // Reset loss counter
     else
         orb_high1 := orb_high1[1]
         orb_low1 := orb_low1[1]
@@ -104,6 +112,7 @@ if sess2Enable
         orb_high2 := high
         orb_low2 := low
         session2TradeCount := 0  // Reset trade counter
+        session2LossCount := 0   // Reset loss counter
     else
         orb_high2 := orb_high2[1]
         orb_low2 := orb_low2[1]
@@ -116,6 +125,7 @@ if sess3Enable
         orb_high3 := high
         orb_low3 := low
         session3TradeCount := 0  // Reset trade counter
+        session3LossCount := 0   // Reset loss counter
     else
         orb_high3 := orb_high3[1]
         orb_low3 := orb_low3[1]
@@ -132,6 +142,21 @@ delta3 = orb_high3 - orb_low3
 volumeMA = ta.sma(volume, volumeMALength)
 volumeCondition = volume >= volumeMultiplier * volumeMA
 breakoutThreshold = breakoutPercent / 100.0
+
+// === Track Closed Trades for Loss Counting ===
+// Check if a new trade closed and if it was a loss
+if strategy.closedtrades > prevClosedTrades
+    // New trade closed - check if it was a loss
+    lastTradeProfit = strategy.closedtrades.profit(strategy.closedtrades - 1)
+    if lastTradeProfit < 0
+        // Increment loss counter for the active session
+        if show1
+            session1LossCount := session1LossCount + 1
+        else if show2
+            session2LossCount := session2LossCount + 1
+        else if show3
+            session3LossCount := session3LossCount + 1
+    prevClosedTrades := strategy.closedtrades
 
 // === Session Display Management ===
 if sess1Enable and is_first1
@@ -163,24 +188,24 @@ long1Breakout = (close - orb_high1) >= (breakoutThreshold * delta1)
 short1Breakout = (orb_low1 - close) >= (breakoutThreshold * delta1)
 long1Basic = is5min and show1 and open < orb_high1 and close > orb_high1
 short1Basic = is5min and show1 and open > orb_low1 and close < orb_low1
-long1 = long1Basic and volumeCondition and long1Breakout and session1TradeCount < maxTradesPerSession
-short1 = short1Basic and volumeCondition and short1Breakout and session1TradeCount < maxTradesPerSession
+long1 = long1Basic and volumeCondition and long1Breakout and session1TradeCount < maxTradesPerSession and session1LossCount < maxLossesPerSession
+short1 = short1Basic and volumeCondition and short1Breakout and session1TradeCount < maxTradesPerSession and session1LossCount < maxLossesPerSession
 
 // Session 2 signals
 long2Breakout = (close - orb_high2) >= (breakoutThreshold * delta2)
 short2Breakout = (orb_low2 - close) >= (breakoutThreshold * delta2)
 long2Basic = is5min and show2 and open < orb_high2 and close > orb_high2
 short2Basic = is5min and show2 and open > orb_low2 and close < orb_low2
-long2 = long2Basic and volumeCondition and long2Breakout and session2TradeCount < maxTradesPerSession
-short2 = short2Basic and volumeCondition and short2Breakout and session2TradeCount < maxTradesPerSession
+long2 = long2Basic and volumeCondition and long2Breakout and session2TradeCount < maxTradesPerSession and session2LossCount < maxLossesPerSession
+short2 = short2Basic and volumeCondition and short2Breakout and session2TradeCount < maxTradesPerSession and session2LossCount < maxLossesPerSession
 
 // Session 3 signals
 long3Breakout = (close - orb_high3) >= (breakoutThreshold * delta3)
 short3Breakout = (orb_low3 - close) >= (breakoutThreshold * delta3)
 long3Basic = is5min and show3 and open < orb_high3 and close > orb_high3
 short3Basic = is5min and show3 and open > orb_low3 and close < orb_low3
-long3 = long3Basic and volumeCondition and long3Breakout and session3TradeCount < maxTradesPerSession
-short3 = short3Basic and volumeCondition and short3Breakout and session3TradeCount < maxTradesPerSession
+long3 = long3Basic and volumeCondition and long3Breakout and session3TradeCount < maxTradesPerSession and session3LossCount < maxLossesPerSession
+short3 = short3Basic and volumeCondition and short3Breakout and session3TradeCount < maxTradesPerSession and session3LossCount < maxLossesPerSession
 
 // === Rubber Band Reversal Signals ===
 rubberBandLong = false
@@ -198,19 +223,19 @@ if enableRubberBand and is5min and volume >= rbVolumeMultiplier * volumeMA
             if prevOrbLong
                 pullbackAmount = high[1] - close
                 if pullbackAmount >= (reversalThreshold * prevCandleRange)
-                    // Check trade count for current session
-                    canTrade = (show1 and session1TradeCount < maxTradesPerSession) or
-                               (show2 and session2TradeCount < maxTradesPerSession) or
-                               (show3 and session3TradeCount < maxTradesPerSession)
+                    // Check trade count and loss count for current session
+                    canTrade = (show1 and session1TradeCount < maxTradesPerSession and session1LossCount < maxLossesPerSession) or
+                               (show2 and session2TradeCount < maxTradesPerSession and session2LossCount < maxLossesPerSession) or
+                               (show3 and session3TradeCount < maxTradesPerSession and session3LossCount < maxLossesPerSession)
                     rubberBandShort := canTrade
 
             if prevOrbShort
                 bounceAmount = close - low[1]
                 if bounceAmount >= (reversalThreshold * prevCandleRange)
-                    // Check trade count for current session
-                    canTrade = (show1 and session1TradeCount < maxTradesPerSession) or
-                               (show2 and session2TradeCount < maxTradesPerSession) or
-                               (show3 and session3TradeCount < maxTradesPerSession)
+                    // Check trade count and loss count for current session
+                    canTrade = (show1 and session1TradeCount < maxTradesPerSession and session1LossCount < maxLossesPerSession) or
+                               (show2 and session2TradeCount < maxTradesPerSession and session2LossCount < maxLossesPerSession) or
+                               (show3 and session3TradeCount < maxTradesPerSession and session3LossCount < maxLossesPerSession)
                     rubberBandLong := canTrade
 
 // === STRATEGY ENTRIES ===
