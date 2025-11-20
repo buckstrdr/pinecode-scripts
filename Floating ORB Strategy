@@ -3,12 +3,10 @@
 strategy('Floating ORB Strategy by BucksTRDR', overlay=true,
          fill_orders_on_standard_ohlc=true,
          initial_capital=1000000,
-         default_qty_type=strategy.fixed,
-         default_qty_value=1,
-         commission_type=strategy.commission.percent,
-         commission_value=0.1,
-         slippage=2,
-         pyramiding=1)
+         default_qty_type=strategy.percent_of_equity,
+         default_qty_value=100,
+         commission_type=strategy.commission.cash_per_contract,
+         commission_value=2)
 
 // === Strategy Inputs ===
 volumeMALength = input.int(20, title='Volume MA Length', minval=1, group='Volume Settings', tooltip='Length for volume moving average')
@@ -83,79 +81,88 @@ var bool firstTrailMove = false  // Track if we've made the first SL adjustment
 var float lastCandleClose = na  // Track previous candle close for trailing
 
 // === Entry Logic ===
-if (triggerLong and strategy.position_size == 0)
+if triggerLong and strategy.position_size == 0
     entryPrice := close
     currentStopLoss := low
     tradeDirection := 1
-    firstTrailMove := false
+    firstTrailMove := true
     lastCandleClose := close
     strategy.entry('Long', strategy.long)
 
     if showDebugLabels
-        label.new(bar_index, high, '🟢 LONG ENTRY\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(low, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
-                  style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=size.normal)
+        label.new(bar_index, high, '🟢 LONG ENTRY\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
+                  style=label.style_label_down, color=color.green, textcolor=color.white, size=size.small)
 
-if (triggerShort and strategy.position_size == 0)
+if triggerShort and strategy.position_size == 0
     entryPrice := close
     currentStopLoss := high
     tradeDirection := -1
-    firstTrailMove := false
+    firstTrailMove := true
     lastCandleClose := close
     strategy.entry('Short', strategy.short)
 
     if showDebugLabels
-        label.new(bar_index, low, '🔴 SHORT ENTRY\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(high, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
-                  style=label.style_label_up, color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.normal)
-
-// === Exit Orders (Stop Loss) ===
-if strategy.position_size > 0
-    strategy.exit('Long SL', 'Long', stop=currentStopLoss)
-
-if strategy.position_size < 0
-    strategy.exit('Short SL', 'Short', stop=currentStopLoss)
+        label.new(bar_index, low, '🔴 SHORT ENTRY\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
+                  style=label.style_label_up, color=color.red, textcolor=color.white, size=size.small)
 
 // === Trailing Stop Logic ===
-// For Long positions
-if strategy.position_size > 0 and tradeDirection == 1
-    // First adjustment: Move SL to breakeven + offset once price moves favorably
-    if not firstTrailMove and close > entryPrice
-        newStopLoss = entryPrice + (tickOffset * syminfo.mintick)
-        if newStopLoss > currentStopLoss
-            currentStopLoss := newStopLoss
-            firstTrailMove := true
-            if showDebugLabels
-                label.new(bar_index, currentStopLoss, '🔵 SL→BE+' + str.tostring(tickOffset),
-                          style=label.style_label_left, color=color.new(color.blue, 30), textcolor=color.white, size=size.tiny)
+if strategy.position_size > 0  // Long position
+    // Check if candle continues in our direction and meets minimum size
+    candleContinues = close > lastCandleClose
+    candleMeetsMinSize = candleRange >= minTrailCandleSize
 
-    // Subsequent trailing: Move SL behind each candle's low (if candle is big enough)
-    if firstTrailMove and (high - low) >= minTrailCandleSize
-        newStopLoss = low
-        if newStopLoss > currentStopLoss
-            currentStopLoss := newStopLoss
-            if showDebugLabels
-                label.new(bar_index, currentStopLoss, '🔵 SL Trail',
-                          style=label.style_label_left, color=color.new(color.blue, 30), textcolor=color.white, size=size.tiny)
+    if candleContinues and candleMeetsMinSize
+        // Calculate new stop loss
+        if firstTrailMove
+            // First move: add tick offset for fees
+            currentStopLoss := lastCandleClose + (tickOffset * syminfo.mintick)
+            firstTrailMove := false
 
-// For Short positions
-if strategy.position_size < 0 and tradeDirection == -1
-    // First adjustment: Move SL to breakeven - offset once price moves favorably
-    if not firstTrailMove and close < entryPrice
-        newStopLoss = entryPrice - (tickOffset * syminfo.mintick)
-        if newStopLoss < currentStopLoss
-            currentStopLoss := newStopLoss
-            firstTrailMove := true
             if showDebugLabels
-                label.new(bar_index, currentStopLoss, '🔵 SL→BE+' + str.tostring(tickOffset),
-                          style=label.style_label_left, color=color.new(color.blue, 30), textcolor=color.white, size=size.tiny)
+                label.new(bar_index, low, '📈 1st Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick) + '\n(+' + str.tostring(tickOffset) + ' ticks)',
+                          style=label.style_label_up, color=color.blue, textcolor=color.white, size=size.tiny)
+        else
+            // Subsequent moves: just use previous candle close
+            currentStopLoss := lastCandleClose
 
-    // Subsequent trailing: Move SL behind each candle's high (if candle is big enough)
-    if firstTrailMove and (high - low) >= minTrailCandleSize
-        newStopLoss = high
-        if newStopLoss < currentStopLoss
-            currentStopLoss := newStopLoss
             if showDebugLabels
-                label.new(bar_index, currentStopLoss, '🔵 SL Trail',
-                          style=label.style_label_left, color=color.new(color.blue, 30), textcolor=color.white, size=size.tiny)
+                label.new(bar_index, low, '📈 Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick),
+                          style=label.style_label_up, color=color.aqua, textcolor=color.black, size=size.tiny)
+
+    // Update last candle close for next bar
+    lastCandleClose := close
+
+    // Apply stop loss
+    strategy.exit('Long Exit', 'Long', stop=currentStopLoss)
+
+if strategy.position_size < 0  // Short position
+    // Check if candle continues in our direction and meets minimum size
+    candleContinues = close < lastCandleClose
+    candleMeetsMinSize = candleRange >= minTrailCandleSize
+
+    if candleContinues and candleMeetsMinSize
+        // Calculate new stop loss
+        if firstTrailMove
+            // First move: subtract tick offset for fees
+            currentStopLoss := lastCandleClose - (tickOffset * syminfo.mintick)
+            firstTrailMove := false
+
+            if showDebugLabels
+                label.new(bar_index, high, '📉 1st Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick) + '\n(-' + str.tostring(tickOffset) + ' ticks)',
+                          style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.tiny)
+        else
+            // Subsequent moves: just use previous candle close
+            currentStopLoss := lastCandleClose
+
+            if showDebugLabels
+                label.new(bar_index, high, '📉 Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick),
+                          style=label.style_label_down, color=color.orange, textcolor=color.black, size=size.tiny)
+
+    // Update last candle close for next bar
+    lastCandleClose := close
+
+    // Apply stop loss
+    strategy.exit('Short Exit', 'Short', stop=currentStopLoss)
 
 // === Close Positions Outside Trading Hours ===
 if closeOutsideHours and not inTradingWindow
@@ -177,13 +184,8 @@ if strategy.position_size == 0 and strategy.position_size[1] != 0
 plotshape(triggerLong, title='Long Trigger', style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.small)
 plotshape(triggerShort, title='Short Trigger', style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.small)
 
-// Plot stop loss and entry lines
+// Plot stop loss line
 plot(strategy.position_size != 0 ? currentStopLoss : na, title='Stop Loss', color=color.red, linewidth=2, style=plot.style_linebr)
-plot(strategy.position_size != 0 ? entryPrice : na, title='Entry Price', color=color.blue, linewidth=1, style=plot.style_linebr)
 
-// === Volume & Position Reference ===
+// === Volume Reference ===
 bgcolor(volumeCondition ? color.new(color.blue, 95) : na, title='High Volume Background')
-
-// Highlight when strategy has an active position
-bgcolor(strategy.position_size > 0 ? color.new(color.green, 90) : na, title='Long Position Active')
-bgcolor(strategy.position_size < 0 ? color.new(color.red, 90) : na, title='Short Position Active')
