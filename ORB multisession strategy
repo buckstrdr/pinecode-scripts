@@ -77,6 +77,15 @@ var int session1TradeCount = 0
 var int session2TradeCount = 0
 var int session3TradeCount = 0
 
+// === Position Tracking for Stop Management ===
+var float entryPrice = na
+var float tp2Level = na
+var float tp3Level = na
+var bool tp2Reached = false
+var string currentTradeID = ""
+var float highestHigh = na  // Track highest price for long trailing
+var float lowestLow = na    // Track lowest price for short trailing
+
 // === ORB Calculation ===
 if sess1Enable
     if is_first1
@@ -224,6 +233,14 @@ if long1
     strategy.exit("L1_TP2", from_entry=LONG1_ID, limit=orb_high1 + tp2Multiplier * delta1, stop=stopLoss, qty_percent=33)
     strategy.exit("L1_TP3", from_entry=LONG1_ID, limit=orb_high1 + tp3Multiplier * delta1, stop=stopLoss, qty_percent=34)
     session1TradeCount := session1TradeCount + 1
+    // Track position details
+    entryPrice := close
+    tp2Level := orb_high1 + tp2Multiplier * delta1
+    tp3Level := orb_high1 + tp3Multiplier * delta1
+    tp2Reached := false
+    currentTradeID := LONG1_ID
+    highestHigh := high
+    lowestLow := na
 
 if short1
     stopLoss = orb_high1 + (stopLossMultiplier * delta1)
@@ -232,6 +249,14 @@ if short1
     strategy.exit("S1_TP2", from_entry=SHORT1_ID, limit=orb_low1 - tp2Multiplier * delta1, stop=stopLoss, qty_percent=33)
     strategy.exit("S1_TP3", from_entry=SHORT1_ID, limit=orb_low1 - tp3Multiplier * delta1, stop=stopLoss, qty_percent=34)
     session1TradeCount := session1TradeCount + 1
+    // Track position details
+    entryPrice := close
+    tp2Level := orb_low1 - tp2Multiplier * delta1
+    tp3Level := orb_low1 - tp3Multiplier * delta1
+    tp2Reached := false
+    currentTradeID := SHORT1_ID
+    highestHigh := na
+    lowestLow := low
 
 // Session 2 entries
 if long2
@@ -241,6 +266,14 @@ if long2
     strategy.exit("L2_TP2", from_entry=LONG2_ID, limit=orb_high2 + tp2Multiplier * delta2, stop=stopLoss, qty_percent=33)
     strategy.exit("L2_TP3", from_entry=LONG2_ID, limit=orb_high2 + tp3Multiplier * delta2, stop=stopLoss, qty_percent=34)
     session2TradeCount := session2TradeCount + 1
+    // Track position details
+    entryPrice := close
+    tp2Level := orb_high2 + tp2Multiplier * delta2
+    tp3Level := orb_high2 + tp3Multiplier * delta2
+    tp2Reached := false
+    currentTradeID := LONG2_ID
+    highestHigh := high
+    lowestLow := na
 
 if short2
     stopLoss = orb_high2 + (stopLossMultiplier * delta2)
@@ -249,6 +282,14 @@ if short2
     strategy.exit("S2_TP2", from_entry=SHORT2_ID, limit=orb_low2 - tp2Multiplier * delta2, stop=stopLoss, qty_percent=33)
     strategy.exit("S2_TP3", from_entry=SHORT2_ID, limit=orb_low2 - tp3Multiplier * delta2, stop=stopLoss, qty_percent=34)
     session2TradeCount := session2TradeCount + 1
+    // Track position details
+    entryPrice := close
+    tp2Level := orb_low2 - tp2Multiplier * delta2
+    tp3Level := orb_low2 - tp3Multiplier * delta2
+    tp2Reached := false
+    currentTradeID := SHORT2_ID
+    highestHigh := na
+    lowestLow := low
 
 // Session 3 entries
 if long3
@@ -258,6 +299,14 @@ if long3
     strategy.exit("L3_TP2", from_entry=LONG3_ID, limit=orb_high3 + tp2Multiplier * delta3, stop=stopLoss, qty_percent=33)
     strategy.exit("L3_TP3", from_entry=LONG3_ID, limit=orb_high3 + tp3Multiplier * delta3, stop=stopLoss, qty_percent=34)
     session3TradeCount := session3TradeCount + 1
+    // Track position details
+    entryPrice := close
+    tp2Level := orb_high3 + tp2Multiplier * delta3
+    tp3Level := orb_high3 + tp3Multiplier * delta3
+    tp2Reached := false
+    currentTradeID := LONG3_ID
+    highestHigh := high
+    lowestLow := na
 
 if short3
     stopLoss = orb_high3 + (stopLossMultiplier * delta3)
@@ -266,8 +315,16 @@ if short3
     strategy.exit("S3_TP2", from_entry=SHORT3_ID, limit=orb_low3 - tp2Multiplier * delta3, stop=stopLoss, qty_percent=33)
     strategy.exit("S3_TP3", from_entry=SHORT3_ID, limit=orb_low3 - tp3Multiplier * delta3, stop=stopLoss, qty_percent=34)
     session3TradeCount := session3TradeCount + 1
+    // Track position details
+    entryPrice := close
+    tp2Level := orb_low3 - tp2Multiplier * delta3
+    tp3Level := orb_low3 - tp3Multiplier * delta3
+    tp2Reached := false
+    currentTradeID := SHORT3_ID
+    highestHigh := na
+    lowestLow := low
 
-// Rubber Band entries
+// Rubber Band entries (Note: RB trades use simpler TP structure, no trailing)
 if rubberBandLong
     currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
     stopLoss = low - (stopLossMultiplier * currentDelta)
@@ -280,6 +337,11 @@ if rubberBandLong
         session2TradeCount := session2TradeCount + 1
     else if show3
         session3TradeCount := session3TradeCount + 1
+    // Reset tracking since RB doesn't use trailing
+    entryPrice := na
+    tp2Level := na
+    tp2Reached := false
+    currentTradeID := ""
 
 if rubberBandShort
     currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
@@ -293,6 +355,70 @@ if rubberBandShort
         session2TradeCount := session2TradeCount + 1
     else if show3
         session3TradeCount := session3TradeCount + 1
+    // Reset tracking since RB doesn't use trailing
+    entryPrice := na
+    tp2Level := na
+    tp2Reached := false
+    currentTradeID := ""
+
+// === DYNAMIC STOP MANAGEMENT ===
+// Move to break-even when TP2 is hit, then trail toward TP3
+if strategy.position_size != 0 and not na(entryPrice) and not na(tp2Level)
+    isLong = strategy.position_size > 0
+    isShort = strategy.position_size < 0
+
+    // Check if TP2 has been reached
+    if not tp2Reached
+        if (isLong and high >= tp2Level) or (isShort and low <= tp2Level)
+            tp2Reached := true
+
+    // Update stops dynamically after TP2 is reached
+    if tp2Reached
+        // Track highest/lowest since TP2 reached
+        if isLong
+            highestHigh := math.max(highestHigh, high)
+            // Calculate trailing stop: starts at break-even, trails based on how far price moved toward TP3
+            // Trail distance = percentage of progress from TP2 to TP3
+            progressToTP3 = (highestHigh - tp2Level) / (tp3Level - tp2Level)  // 0 to 1 scale
+            progressToTP3 := math.min(1.0, math.max(0.0, progressToTP3))      // Clamp between 0 and 1
+            // Stop trails from entry to TP2 as price moves from TP2 to TP3
+            trailStop = entryPrice + (tp2Level - entryPrice) * progressToTP3
+
+            // Update all remaining exits with trailing stop
+            if currentTradeID == LONG1_ID
+                strategy.exit("L1_TP1_Trail", from_entry=LONG1_ID, stop=trailStop, qty_percent=33)
+                strategy.exit("L1_TP2_Trail", from_entry=LONG1_ID, limit=orb_high1 + tp2Multiplier * delta1, stop=trailStop, qty_percent=33)
+                strategy.exit("L1_TP3_Trail", from_entry=LONG1_ID, limit=orb_high1 + tp3Multiplier * delta1, stop=trailStop, qty_percent=34)
+            else if currentTradeID == LONG2_ID
+                strategy.exit("L2_TP1_Trail", from_entry=LONG2_ID, stop=trailStop, qty_percent=33)
+                strategy.exit("L2_TP2_Trail", from_entry=LONG2_ID, limit=orb_high2 + tp2Multiplier * delta2, stop=trailStop, qty_percent=33)
+                strategy.exit("L2_TP3_Trail", from_entry=LONG2_ID, limit=orb_high2 + tp3Multiplier * delta2, stop=trailStop, qty_percent=34)
+            else if currentTradeID == LONG3_ID
+                strategy.exit("L3_TP1_Trail", from_entry=LONG3_ID, stop=trailStop, qty_percent=33)
+                strategy.exit("L3_TP2_Trail", from_entry=LONG3_ID, limit=orb_high3 + tp2Multiplier * delta3, stop=trailStop, qty_percent=33)
+                strategy.exit("L3_TP3_Trail", from_entry=LONG3_ID, limit=orb_high3 + tp3Multiplier * delta3, stop=trailStop, qty_percent=34)
+
+        if isShort
+            lowestLow := math.min(lowestLow, low)
+            // Calculate trailing stop: starts at break-even, trails based on how far price moved toward TP3
+            progressToTP3 = (tp2Level - lowestLow) / (tp2Level - tp3Level)  // 0 to 1 scale
+            progressToTP3 := math.min(1.0, math.max(0.0, progressToTP3))    // Clamp between 0 and 1
+            // Stop trails from entry to TP2 as price moves from TP2 to TP3
+            trailStop = entryPrice - (entryPrice - tp2Level) * progressToTP3
+
+            // Update all remaining exits with trailing stop
+            if currentTradeID == SHORT1_ID
+                strategy.exit("S1_TP1_Trail", from_entry=SHORT1_ID, stop=trailStop, qty_percent=33)
+                strategy.exit("S1_TP2_Trail", from_entry=SHORT1_ID, limit=orb_low1 - tp2Multiplier * delta1, stop=trailStop, qty_percent=33)
+                strategy.exit("S1_TP3_Trail", from_entry=SHORT1_ID, limit=orb_low1 - tp3Multiplier * delta1, stop=trailStop, qty_percent=34)
+            else if currentTradeID == SHORT2_ID
+                strategy.exit("S2_TP1_Trail", from_entry=SHORT2_ID, stop=trailStop, qty_percent=33)
+                strategy.exit("S2_TP2_Trail", from_entry=SHORT2_ID, limit=orb_low2 - tp2Multiplier * delta2, stop=trailStop, qty_percent=33)
+                strategy.exit("S2_TP3_Trail", from_entry=SHORT2_ID, limit=orb_low2 - tp3Multiplier * delta2, stop=trailStop, qty_percent=34)
+            else if currentTradeID == SHORT3_ID
+                strategy.exit("S3_TP1_Trail", from_entry=SHORT3_ID, stop=trailStop, qty_percent=33)
+                strategy.exit("S3_TP2_Trail", from_entry=SHORT3_ID, limit=orb_low3 - tp2Multiplier * delta3, stop=trailStop, qty_percent=33)
+                strategy.exit("S3_TP3_Trail", from_entry=SHORT3_ID, limit=orb_low3 - tp3Multiplier * delta3, stop=trailStop, qty_percent=34)
 
 // Close all positions at session end
 if is_end1 or is_end2 or is_end3
