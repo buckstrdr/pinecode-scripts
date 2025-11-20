@@ -23,6 +23,10 @@ enableTimeFilter = input.bool(false, title='Enable Time Filter', group='Time Fil
 tradingSession = input.session('0930-1600', title='Trading Hours', group='Time Filter', tooltip='Time window for entries (in exchange timezone)')
 closeOutsideHours = input.bool(false, title='Close Positions Outside Hours', group='Time Filter', tooltip='Close any open positions when outside trading hours')
 
+// === End of Day Close ===
+enableEODClose = input.bool(true, title='Enable End of Day Close', group='Time Filter', tooltip='Close all positions at specific time')
+eodCloseTime = input.string('2100', title='EOD Close Time (UTC)', group='Time Filter', tooltip='Time to close all positions (24hr format, e.g. 2100 for 9pm UTC)')
+
 // Debug option
 showDebugLabels = input.bool(true, title='Show Debug Labels', group='Display', tooltip='Show debug information on chart')
 showFailedConditions = input.bool(true, title='Show Failed Condition Labels', group='Display', tooltip='Show why trades did not trigger')
@@ -32,6 +36,16 @@ is5min = timeframe.isintraday and timeframe.multiplier == 5
 
 // === Time Filter Check ===
 inTradingWindow = not enableTimeFilter or not na(time(timeframe.period, tradingSession))
+
+// === End of Day Close Check ===
+// Parse EOD time (e.g., "2100" = 21:00 = 9pm)
+eodHour = str.tonumber(str.substring(eodCloseTime, 0, 2))
+eodMinute = str.tonumber(str.substring(eodCloseTime, 2, 4))
+currentHour = hour(time, 'UTC')
+currentMinute = minute(time, 'UTC')
+
+// Check if we've reached EOD close time
+isEODCloseTime = enableEODClose and currentHour == eodHour and currentMinute == eodMinute
 
 // === Volume Calculations ===
 volumeMA = ta.sma(volume, volumeMALength)
@@ -170,6 +184,17 @@ if closeOutsideHours and not inTradingWindow
         strategy.close('Long', comment='Outside Trading Hours')
     if strategy.position_size < 0
         strategy.close('Short', comment='Outside Trading Hours')
+
+// === End of Day Close ===
+if isEODCloseTime
+    if strategy.position_size > 0
+        strategy.close('Long', comment='EOD Close 21:00 UTC')
+        if showDebugLabels
+            label.new(bar_index, high, '🔔 EOD CLOSE\n21:00 UTC', style=label.style_label_down, color=color.new(color.purple, 0), textcolor=color.white, size=size.small)
+    if strategy.position_size < 0
+        strategy.close('Short', comment='EOD Close 21:00 UTC')
+        if showDebugLabels
+            label.new(bar_index, low, '🔔 EOD CLOSE\n21:00 UTC', style=label.style_label_up, color=color.new(color.purple, 0), textcolor=color.white, size=size.small)
 
 // === Reset on Position Close ===
 if strategy.position_size == 0 and strategy.position_size[1] != 0
