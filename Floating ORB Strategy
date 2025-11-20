@@ -18,6 +18,10 @@ minTrailCandleSize = input.float(3.0, title='Min Candle Size for Trailing (point
 
 tickOffset = input.float(2.0, title='Tick Offset for First SL Move', minval=0, step=0.5, group='Stop Loss Settings', tooltip='Offset in ticks for first stop loss move (to cover fees)')
 
+// === Trend Filter Inputs ===
+enableTrendFilter = input.bool(true, title='Enable Trend Filter', group='Trend Filter', tooltip='Only trade in direction of trend')
+trendEMALength = input.int(200, title='Trend EMA Length', minval=1, group='Trend Filter', tooltip='EMA length for trend direction (e.g., 200)')
+
 // === Time Filter Inputs ===
 enableTimeFilter = input.bool(false, title='Enable Time Filter', group='Time Filter', tooltip='Only trade during specific hours')
 tradingSession = input.session('0930-1600', title='Trading Hours', group='Time Filter', tooltip='Time window for entries (in exchange timezone)')
@@ -51,6 +55,11 @@ isEODCloseTime = enableEODClose and currentHour == eodHour and currentMinute == 
 volumeMA = ta.sma(volume, volumeMALength)
 volumeCondition = volume >= volumeMultiplier * volumeMA
 
+// === Trend Filter Calculations ===
+trendEMA = ta.ema(close, trendEMALength)
+inUptrend = close > trendEMA
+inDowntrend = close < trendEMA
+
 // === Candle Calculations ===
 candleRange = high - low
 candleIsBullish = close > open
@@ -58,8 +67,13 @@ candleIsBearish = close < open
 
 // === Trigger Candle Conditions ===
 validCandleRange = candleRange >= minCandleRange and candleRange <= maxCandleRange
-triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange and inTradingWindow
-triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange and inTradingWindow
+
+// Apply trend filter if enabled
+trendAllowsLong = not enableTrendFilter or inUptrend
+trendAllowsShort = not enableTrendFilter or inDowntrend
+
+triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange and inTradingWindow and trendAllowsLong
+triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange and inTradingWindow and trendAllowsShort
 
 // === Debug Failed Conditions ===
 if showFailedConditions and strategy.position_size == 0
@@ -74,6 +88,7 @@ if showFailedConditions and strategy.position_size == 0
         debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗ ' + str.tostring(volume/volumeMA, '#.##') + 'x MA') + '\n'
         debugText := debugText + 'Range: ' + (validCandleRange ? '✓' : '✗ ' + str.tostring(candleRange, '#.##') + ' pts') + '\n'
         debugText := debugText + 'Min: ' + str.tostring(minCandleRange, '#.#') + ' Max: ' + str.tostring(maxCandleRange, '#.#') + '\n'
+        debugText := debugText + 'Trend: ' + (trendAllowsLong ? '✓' : '✗ Below EMA') + '\n'
         debugText := debugText + 'Time: ' + (inTradingWindow ? '✓' : '✗ Outside hours')
         label.new(bar_index, high, debugText, style=label.style_label_down, color=color.new(color.orange, 0), textcolor=color.black, size=size.tiny)
 
@@ -84,6 +99,7 @@ if showFailedConditions and strategy.position_size == 0
         debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗ ' + str.tostring(volume/volumeMA, '#.##') + 'x MA') + '\n'
         debugText := debugText + 'Range: ' + (validCandleRange ? '✓ ' : '✗ ' + str.tostring(candleRange, '#.##') + ' pts') + '\n'
         debugText := debugText + 'Min: ' + str.tostring(minCandleRange, '#.#') + ' Max: ' + str.tostring(maxCandleRange, '#.#') + '\n'
+        debugText := debugText + 'Trend: ' + (trendAllowsShort ? '✓' : '✗ Above EMA') + '\n'
         debugText := debugText + 'Time: ' + (inTradingWindow ? '✓' : '✗ Outside hours')
         label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.orange, 0), textcolor=color.black, size=size.tiny)
 
@@ -211,6 +227,9 @@ plotshape(triggerShort, title='Short Trigger', style=shape.triangledown, locatio
 
 // Plot stop loss line
 plot(strategy.position_size != 0 ? currentStopLoss : na, title='Stop Loss', color=color.red, linewidth=2, style=plot.style_linebr)
+
+// Plot trend EMA
+plot(enableTrendFilter ? trendEMA : na, title='Trend EMA', color=color.new(color.yellow, 0), linewidth=2)
 
 // === Volume Reference ===
 bgcolor(volumeCondition ? color.new(color.blue, 95) : na, title='High Volume Background')
