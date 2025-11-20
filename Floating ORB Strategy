@@ -12,11 +12,19 @@ minTrailCandleSize = input.float(3.0, title='Min Candle Size for Trailing (point
 
 tickOffset = input.float(2.0, title='Tick Offset for First SL Move', minval=0, step=0.5, group='Stop Loss Settings', tooltip='Offset in ticks for first stop loss move (to cover fees)')
 
+// === Time Filter Inputs ===
+enableTimeFilter = input.bool(true, title='Enable Time Filter', group='Time Filter', tooltip='Only trade during specific hours')
+tradingSession = input.session('0930-1600', title='Trading Hours', group='Time Filter', tooltip='Time window for entries (in exchange timezone)')
+closeOutsideHours = input.bool(false, title='Close Positions Outside Hours', group='Time Filter', tooltip='Close any open positions when outside trading hours')
+
 // Debug option
 showDebugLabels = input.bool(false, title='Show Debug Labels', group='Display', tooltip='Show debug information on chart')
 
 // === Timeframe Check ===
 is5min = timeframe.isintraday and timeframe.multiplier == 5
+
+// === Time Filter Check ===
+inTradingWindow = not enableTimeFilter or not na(time(timeframe.period, tradingSession))
 
 // === Volume Calculations ===
 volumeMA = ta.sma(volume, volumeMALength)
@@ -29,8 +37,8 @@ candleIsBearish = close < open
 
 // === Trigger Candle Conditions ===
 validCandleRange = candleRange >= minCandleRange and candleRange <= maxCandleRange
-triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange
-triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange
+triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange and inTradingWindow
+triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange and inTradingWindow
 
 // === Track Position State ===
 var float entryPrice = na
@@ -122,6 +130,13 @@ if strategy.position_size < 0  // Short position
 
     // Apply stop loss
     strategy.exit('Short Exit', 'Short', stop=currentStopLoss)
+
+// === Close Positions Outside Trading Hours ===
+if closeOutsideHours and not inTradingWindow
+    if strategy.position_size > 0
+        strategy.close('Long', comment='Outside Trading Hours')
+    if strategy.position_size < 0
+        strategy.close('Short', comment='Outside Trading Hours')
 
 // === Reset on Position Close ===
 if strategy.position_size == 0 and strategy.position_size[1] != 0

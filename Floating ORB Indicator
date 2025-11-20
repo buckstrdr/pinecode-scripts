@@ -12,6 +12,10 @@ minTrailCandleSize = input.float(3.0, title='Min Candle Size for Trailing (point
 
 tickOffset = input.float(2.0, title='Tick Offset for First SL Move', minval=0, step=0.5, group='Stop Loss Settings', tooltip='Offset in ticks for first stop loss move (to cover fees)')
 
+// === Time Filter Inputs ===
+enableTimeFilter = input.bool(true, title='Enable Time Filter', group='Time Filter', tooltip='Only show signals during specific hours')
+tradingSession = input.session('0930-1600', title='Trading Hours', group='Time Filter', tooltip='Time window for entries (in exchange timezone)')
+
 // Display options
 showInfoTable = input.bool(true, title='Show Info Table', group='Display', tooltip='Display condition dashboard')
 showTrailingStop = input.bool(true, title='Show Trailing Stop Reference', group='Display', tooltip='Show where trailing stop would be')
@@ -19,6 +23,9 @@ showVolumeBackground = input.bool(true, title='Show Volume Background', group='D
 
 // === Timeframe Check ===
 is5min = timeframe.isintraday and timeframe.multiplier == 5
+
+// === Time Filter Check ===
+inTradingWindow = not enableTimeFilter or not na(time(timeframe.period, tradingSession))
 
 // === Volume Calculations ===
 volumeMA = ta.sma(volume, volumeMALength)
@@ -32,8 +39,8 @@ candleIsBearish = close < open
 
 // === Trigger Candle Conditions ===
 validCandleRange = candleRange >= minCandleRange and candleRange <= maxCandleRange
-triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange
-triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange
+triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange and inTradingWindow
+triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange and inTradingWindow
 
 // === Track Virtual Position for Trailing Stop Display ===
 var float virtualEntryPrice = na
@@ -108,7 +115,7 @@ bgcolor(showVolumeBackground and volumeCondition ? color.new(color.blue, 95) : n
 
 // === Info Table ===
 if showInfoTable and barstate.islast
-    var table infoTable = table.new(position.top_right, 2, 7, border_width=1)
+    var table infoTable = table.new(position.top_right, 2, 8, border_width=1)
 
     // Headers
     table.cell(infoTable, 0, 0, 'Condition', bgcolor=color.new(color.gray, 50), text_color=color.white, text_size=size.small)
@@ -120,35 +127,43 @@ if showInfoTable and barstate.islast
                bgcolor=is5min ? color.new(color.green, 80) : color.new(color.red, 80),
                text_color=is5min ? color.green : color.red, text_size=size.small)
 
+    // Time Filter
+    table.cell(infoTable, 0, 2, 'Trading Hours', text_size=size.small)
+    timeFilterText = enableTimeFilter ? (inTradingWindow ? '✓ Open' : '✗ Closed') : '✓ Disabled'
+    timeFilterColor = enableTimeFilter ? (inTradingWindow ? color.green : color.red) : color.gray
+    table.cell(infoTable, 1, 2, timeFilterText,
+               bgcolor=color.new(timeFilterColor, 80),
+               text_color=timeFilterColor, text_size=size.small)
+
     // Volume
-    table.cell(infoTable, 0, 2, 'Volume', text_size=size.small)
-    table.cell(infoTable, 1, 2, str.tostring(volumePercent, '#.#') + '% of MA',
+    table.cell(infoTable, 0, 3, 'Volume', text_size=size.small)
+    table.cell(infoTable, 1, 3, str.tostring(volumePercent, '#.#') + '% of MA',
                bgcolor=volumeCondition ? color.new(color.green, 80) : color.new(color.red, 80),
                text_color=volumeCondition ? color.green : color.red, text_size=size.small)
 
     // Candle Range
-    table.cell(infoTable, 0, 3, 'Candle Range', text_size=size.small)
-    table.cell(infoTable, 1, 3, str.tostring(candleRange, '#.##') + ' pts',
+    table.cell(infoTable, 0, 4, 'Candle Range', text_size=size.small)
+    table.cell(infoTable, 1, 4, str.tostring(candleRange, '#.##') + ' pts',
                bgcolor=validCandleRange ? color.new(color.green, 80) : color.new(color.red, 80),
                text_color=validCandleRange ? color.green : color.red, text_size=size.small)
 
     // Range Limits
-    table.cell(infoTable, 0, 4, 'Range Limits', text_size=size.small)
-    table.cell(infoTable, 1, 4, str.tostring(minCandleRange, '#.#') + ' - ' + str.tostring(maxCandleRange, '#.#'),
+    table.cell(infoTable, 0, 5, 'Range Limits', text_size=size.small)
+    table.cell(infoTable, 1, 5, str.tostring(minCandleRange, '#.#') + ' - ' + str.tostring(maxCandleRange, '#.#'),
                text_color=color.gray, text_size=size.small)
 
     // Virtual Position
-    table.cell(infoTable, 0, 5, 'Position', text_size=size.small)
+    table.cell(infoTable, 0, 6, 'Position', text_size=size.small)
     posText = virtualDirection == 1 ? 'LONG' : virtualDirection == -1 ? 'SHORT' : 'None'
     posColor = virtualDirection == 1 ? color.green : virtualDirection == -1 ? color.red : color.gray
-    table.cell(infoTable, 1, 5, posText,
+    table.cell(infoTable, 1, 6, posText,
                bgcolor=color.new(posColor, 80),
                text_color=posColor, text_size=size.small)
 
     // Virtual Stop Loss
-    table.cell(infoTable, 0, 6, 'Virtual SL', text_size=size.small)
+    table.cell(infoTable, 0, 7, 'Virtual SL', text_size=size.small)
     slText = virtualDirection != 0 ? str.tostring(virtualStopLoss, format.mintick) : '-'
-    table.cell(infoTable, 1, 6, slText, text_color=color.red, text_size=size.small)
+    table.cell(infoTable, 1, 7, slText, text_color=color.red, text_size=size.small)
 
 // === Alert Conditions ===
 alertcondition(triggerLong, title='Long Signal', message='Floating ORB: LONG signal triggered!')
