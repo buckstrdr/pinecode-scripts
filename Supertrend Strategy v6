@@ -52,7 +52,7 @@ var float takeProfit = na
 // Long Entry: When Supertrend flips to bullish
 if buySignal and strategy.position_size == 0
     entryPrice := close
-    initialStop := dn  // Use the Supertrend line as initial stop
+    initialStop := up  // Use the GREEN Supertrend line as stop for longs
 
     // Calculate take profit based on risk-reward ratio
     stopDistance = entryPrice - initialStop
@@ -67,7 +67,7 @@ if buySignal and strategy.position_size == 0
 // Short Entry: When Supertrend flips to bearish
 if sellSignal and strategy.position_size == 0
     entryPrice := close
-    initialStop := up  // Use the Supertrend line as initial stop
+    initialStop := dn  // Use the RED Supertrend line as stop for shorts
 
     // Calculate take profit based on risk-reward ratio
     stopDistance = initialStop - entryPrice
@@ -82,7 +82,7 @@ if sellSignal and strategy.position_size == 0
 // === Trailing Stop and Take Profit Management ===
 // Long position management
 if strategy.position_size > 0
-    currentStop = trailWithSupertrend ? dn : initialStop  // Trail with Supertrend or use initial
+    currentStop = trailWithSupertrend ? up : initialStop  // Trail with GREEN line for longs
 
     if useTakeProfit
         strategy.exit('Long Exit', 'Long', stop=currentStop, limit=takeProfit)
@@ -91,7 +91,7 @@ if strategy.position_size > 0
 
 // Short position management
 if strategy.position_size < 0
-    currentStop = trailWithSupertrend ? up : initialStop  // Trail with Supertrend or use initial
+    currentStop = trailWithSupertrend ? dn : initialStop  // Trail with RED line for shorts
 
     if useTakeProfit
         strategy.exit('Short Exit', 'Short', stop=currentStop, limit=takeProfit)
@@ -114,9 +114,9 @@ plotshape(sellSignal ? dn : na, title='DownTrend Begins', location=location.abso
 plotshape(sellSignal and showsignals ? dn : na, title='Sell', text='Sell', location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.red, 0), textcolor=color.white)
 
 // Plot stop loss and take profit levels
-plot(strategy.position_size != 0 and not na(takeProfit) ? takeProfit : na, title='Take Profit', color=color.new(color.green, 0), linewidth=1, style=plot.style_circles)
-plot(strategy.position_size > 0 ? dn : na, title='Long Stop (Supertrend)', color=color.new(color.red, 0), linewidth=1, style=plot.style_circles)
-plot(strategy.position_size < 0 ? up : na, title='Short Stop (Supertrend)', color=color.new(color.red, 0), linewidth=1, style=plot.style_circles)
+plot(strategy.position_size != 0 and not na(takeProfit) ? takeProfit : na, title='Take Profit', color=color.new(color.yellow, 0), linewidth=1, style=plot.style_circles)
+plot(strategy.position_size > 0 ? up : na, title='Long Stop (Supertrend)', color=color.new(color.red, 0), linewidth=1, style=plot.style_circles)
+plot(strategy.position_size < 0 ? dn : na, title='Short Stop (Supertrend)', color=color.new(color.red, 0), linewidth=1, style=plot.style_circles)
 
 mPlot = plot(ohlc4, title='', style=plot.style_circles, linewidth=0, display=display.none)
 
