@@ -76,18 +76,21 @@ if showFailedConditions and strategy.position_size == 0
         label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.orange, 0), textcolor=color.black, size=size.tiny)
 
 // === ULTRA SIMPLIFIED ENTRY FOR TESTING ===
-// Just the most basic entry possible - no var tracking, no exits
-if triggerLong and barstate.isconfirmed
-    strategy.entry('Long', strategy.long, qty=1)
-    if showDebugLabels
-        label.new(bar_index, high, '🟢 LONG ENTRY\nPrice: ' + str.tostring(close, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
-                  style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=size.normal)
+// Matching TradingView template exactly - no barstate, no qty parameter
+if (triggerLong)
+    strategy.entry('Long', strategy.long)
 
-if triggerShort and barstate.isconfirmed
-    strategy.entry('Short', strategy.short, qty=1)
-    if showDebugLabels
-        label.new(bar_index, low, '🔴 SHORT ENTRY\nPrice: ' + str.tostring(close, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
-                  style=label.style_label_up, color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.normal)
+if (triggerShort)
+    strategy.entry('Short', strategy.short)
+
+// Debug labels separate from entry logic
+if triggerLong and showDebugLabels
+    label.new(bar_index, high, '🟢 LONG ENTRY\nPrice: ' + str.tostring(close, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
+              style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=size.normal)
+
+if triggerShort and showDebugLabels
+    label.new(bar_index, low, '🔴 SHORT ENTRY\nPrice: ' + str.tostring(close, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
+              style=label.style_label_up, color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.normal)
 
 // === Visual Reference ===
 // Plot entry signals
