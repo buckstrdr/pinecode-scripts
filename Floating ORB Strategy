@@ -79,12 +79,16 @@ if showFailedConditions and strategy.position_size == 0
 var float entryPrice = na
 var float currentStopLoss = na
 var int tradeDirection = 0  // 1 = long, -1 = short, 0 = no position
+var bool firstTrailMove = false  // Track if we've made the first SL adjustment
+var float lastCandleClose = na  // Track previous candle close for trailing
 
 // === Entry Logic ===
 if (triggerLong and strategy.position_size == 0)
     entryPrice := close
     currentStopLoss := low
     tradeDirection := 1
+    firstTrailMove := false
+    lastCandleClose := close
     strategy.entry('Long', strategy.long)
 
     if showDebugLabels
@@ -95,6 +99,8 @@ if (triggerShort and strategy.position_size == 0)
     entryPrice := close
     currentStopLoss := high
     tradeDirection := -1
+    firstTrailMove := false
+    lastCandleClose := close
     strategy.entry('Short', strategy.short)
 
     if showDebugLabels
@@ -108,6 +114,49 @@ if strategy.position_size > 0
 if strategy.position_size < 0
     strategy.exit('Short SL', 'Short', stop=currentStopLoss)
 
+// === Trailing Stop Logic ===
+// For Long positions
+if strategy.position_size > 0 and tradeDirection == 1
+    // First adjustment: Move SL to breakeven + offset once price moves favorably
+    if not firstTrailMove and close > entryPrice
+        newStopLoss = entryPrice + (tickOffset * syminfo.mintick)
+        if newStopLoss > currentStopLoss
+            currentStopLoss := newStopLoss
+            firstTrailMove := true
+            if showDebugLabels
+                label.new(bar_index, currentStopLoss, '🔵 SL→BE+' + str.tostring(tickOffset),
+                          style=label.style_label_left, color=color.new(color.blue, 30), textcolor=color.white, size=size.tiny)
+
+    // Subsequent trailing: Move SL behind each candle's low (if candle is big enough)
+    if firstTrailMove and (high - low) >= minTrailCandleSize
+        newStopLoss = low
+        if newStopLoss > currentStopLoss
+            currentStopLoss := newStopLoss
+            if showDebugLabels
+                label.new(bar_index, currentStopLoss, '🔵 SL Trail',
+                          style=label.style_label_left, color=color.new(color.blue, 30), textcolor=color.white, size=size.tiny)
+
+// For Short positions
+if strategy.position_size < 0 and tradeDirection == -1
+    // First adjustment: Move SL to breakeven - offset once price moves favorably
+    if not firstTrailMove and close < entryPrice
+        newStopLoss = entryPrice - (tickOffset * syminfo.mintick)
+        if newStopLoss < currentStopLoss
+            currentStopLoss := newStopLoss
+            firstTrailMove := true
+            if showDebugLabels
+                label.new(bar_index, currentStopLoss, '🔵 SL→BE+' + str.tostring(tickOffset),
+                          style=label.style_label_left, color=color.new(color.blue, 30), textcolor=color.white, size=size.tiny)
+
+    // Subsequent trailing: Move SL behind each candle's high (if candle is big enough)
+    if firstTrailMove and (high - low) >= minTrailCandleSize
+        newStopLoss = high
+        if newStopLoss < currentStopLoss
+            currentStopLoss := newStopLoss
+            if showDebugLabels
+                label.new(bar_index, currentStopLoss, '🔵 SL Trail',
+                          style=label.style_label_left, color=color.new(color.blue, 30), textcolor=color.white, size=size.tiny)
+
 // === Close Positions Outside Trading Hours ===
 if closeOutsideHours and not inTradingWindow
     if strategy.position_size > 0
@@ -120,6 +169,8 @@ if strategy.position_size == 0 and strategy.position_size[1] != 0
     entryPrice := na
     currentStopLoss := na
     tradeDirection := 0
+    firstTrailMove := false
+    lastCandleClose := na
 
 // === Visual Reference ===
 // Plot entry signals
