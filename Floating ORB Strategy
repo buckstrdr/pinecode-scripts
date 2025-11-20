@@ -83,7 +83,8 @@ var bool firstTrailMove = false  // Track if we've made the first SL adjustment
 var float lastCandleClose = na  // Track previous candle close for trailing
 
 // === Entry Logic ===
-if (triggerLong and strategy.position_size == 0)
+// Enter long position (will auto-reverse if in short)
+if (triggerLong and tradeDirection != 1)
     entryPrice := close
     currentStopLoss := low
     tradeDirection := 1
@@ -95,7 +96,8 @@ if (triggerLong and strategy.position_size == 0)
         label.new(bar_index, high, '🟢 LONG ENTRY\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(low, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
                   style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=size.normal)
 
-if (triggerShort and strategy.position_size == 0)
+// Enter short position (will auto-reverse if in long)
+if (triggerShort and tradeDirection != -1)
     entryPrice := close
     currentStopLoss := high
     tradeDirection := -1
