@@ -93,15 +93,9 @@ if triggerShort
 plotshape(triggerLong, title='Long Trigger', style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.small)
 plotshape(triggerShort, title='Short Trigger', style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.small)
 
-// Plot stop loss line
-plot(strategy.position_size != 0 ? currentStopLoss : na, title='Stop Loss', color=color.red, linewidth=2, style=plot.style_linebr)
-
 // === Volume & Position Reference ===
 bgcolor(volumeCondition ? color.new(color.blue, 95) : na, title='High Volume Background')
 
 // Highlight when strategy has an active position
 bgcolor(strategy.position_size > 0 ? color.new(color.green, 90) : na, title='Long Position Active')
 bgcolor(strategy.position_size < 0 ? color.new(color.red, 90) : na, title='Short Position Active')
-
-// Plot a line at entry price when in position
-plot(strategy.position_size != 0 ? entryPrice : na, title='Entry Price', color=color.blue, linewidth=1, style=plot.style_linebr)
