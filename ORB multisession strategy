@@ -2,171 +2,117 @@
 // DISCLAIMER: This strategy is provided "as is" for educational purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
 strategy('ORB Multi-Session Strategy by BucksTRDR', overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, pyramiding=0, calc_on_every_tick=false, calc_on_order_fills=false)
 
-// === Strategy Inputs ===
+// === Strategy Settings ===
 stopLossMultiplier = input.float(1.0, title='Stop Loss Multiplier', minval=0.1, step=0.1, tooltip='Stop loss as multiple of OR range (e.g., 1.0 = 1x range)')
-useTrailingStop = input.bool(false, title='Use Trailing Stop', tooltip='Enable trailing stop loss')
-trailingStopPercent = input.float(1.0, title='Trailing Stop %', minval=0.1, step=0.1, tooltip='Trailing stop percentage')
+maxTradesPerSession = input.int(1, title='Max Trades Per Session', minval=1, maxval=10, tooltip='Maximum number of trades allowed per session')
 
-// === User Inputs ===
-orbTotalTime   = input.int(5, title='ORB total time (minutes)')
+// === ORB Settings ===
+orbTotalTime = input.int(5, title='ORB total time (minutes)')
 
-// === Volume Confirmation Inputs ===
-volumeMALength = input.int(20, title='Volume MA Length', minval=1, tooltip='Length for volume moving average')
-volumeMultiplier = input.float(1.5, title='Volume Multiplier', minval=0.1, step=0.1, tooltip='Minimum volume multiplier vs MA (e.g. 1.5 = 150% of volume MA)')
-breakoutPercent = input.float(25.0, title='Minimum Breakout %', minval=1.0, step=1.0, tooltip='Minimum breakout percentage of OR range (e.g. 25 = 25% of range)')
+// === Volume Confirmation ===
+volumeMALength = input.int(20, title='Volume MA Length', minval=1)
+volumeMultiplier = input.float(1.5, title='Volume Multiplier', minval=0.1, step=0.1)
+breakoutPercent = input.float(25.0, title='Minimum Breakout %', minval=1.0, step=1.0)
 
-// === Rubber Band Signal Inputs ===
-enableRubberBand = input.bool(true, title='Enable Rubber Band Signals', tooltip='Enable rubber band reversal signals')
-rbVolumeMultiplier = input.float(1.2, title='Rubber Band Volume Multiplier', minval=0.1, step=0.1, tooltip='Minimum volume multiplier for rubber band reversal (e.g. 1.2 = 120% of volume MA)')
-rbReversalPercent = input.float(50.0, title='Rubber Band Reversal %', minval=10.0, step=5.0, tooltip='Minimum reversal percentage of breakout candle (e.g. 50 = 50% retracement)')
-
-// === Debug Settings ===
-showAllBreakouts = input.bool(false, title='Show All Breakouts', tooltip='Display debug information for all ORB breakouts (successful and failed)')
-showSuccessfulBreakouts = input.bool(false, title='Show Successful Breakouts Only', tooltip='Display debug information only for successful trade signals')
+// === Rubber Band Settings ===
+enableRubberBand = input.bool(true, title='Enable Rubber Band Signals')
+rbVolumeMultiplier = input.float(1.2, title='Rubber Band Volume Multiplier', minval=0.1, step=0.1)
+rbReversalPercent = input.float(50.0, title='Rubber Band Reversal %', minval=10.0, step=5.0)
 
 // === Timezone Selection ===
-user_timezone = input.string("UTC+1", title="Your Timezone", options=["UTC", "UTC+1", "UTC+2", "UTC+3", "UTC+4", "UTC+5", "UTC+6", "UTC+7", "UTC+8", "UTC+9", "UTC+10", "UTC+11", "UTC+12", "UTC-1", "UTC-2", "UTC-3", "UTC-4", "UTC-5", "UTC-6", "UTC-7", "UTC-8", "UTC-9", "UTC-10", "UTC-11", "UTC-12"], tooltip="Select your timezone - session times will be input in YOUR local time")
+user_timezone = input.string("UTC+1", title="Your Timezone", options=["UTC", "UTC+1", "UTC+2", "UTC+3", "UTC+4", "UTC+5", "UTC+6", "UTC+7", "UTC+8", "UTC+9", "UTC+10", "UTC+11", "UTC+12", "UTC-1", "UTC-2", "UTC-3", "UTC-4", "UTC-5", "UTC-6", "UTC-7", "UTC-8", "UTC-9", "UTC-10", "UTC-11", "UTC-12"])
 
-// === Session Enable/Disable Controls ===
-sess1Enable    = input.bool(true, title='Enable Session 1')
-sess1          = input.session('0800-0805', title='Session 1 Time (Your Local Time)')
-sess1Label     = input.string('London OR',   title='Session 1 Label')
+// === Session Configuration ===
+sess1Enable = input.bool(true, title='Enable Session 1')
+sess1 = input.session('0800-0805', title='Session 1 Time (Your Local Time)')
+sess1Label = input.string('London OR', title='Session 1 Label')
 
-sess2Enable    = input.bool(true, title='Enable Session 2')
-sess2          = input.session('1430-1535', title='Session 2 Time (Your Local Time)')
-sess2Label     = input.string('New York OR',   title='Session 2 Label')
+sess2Enable = input.bool(true, title='Enable Session 2')
+sess2 = input.session('1430-1535', title='Session 2 Time (Your Local Time)')
+sess2Label = input.string('New York OR', title='Session 2 Label')
 
-sess3Enable    = input.bool(true, title='Enable Session 3')
-sess3          = input.session('0100-0105', title='Session 3 Time (Your Local Time)')
-sess3Label     = input.string('Asia OR',   title='Session 3 Label')
+sess3Enable = input.bool(true, title='Enable Session 3')
+sess3 = input.session('0100-0105', title='Session 3 Time (Your Local Time)')
+sess3Label = input.string('Asia OR', title='Session 3 Label')
 
-// === EMA Length Inputs ===
-ema1Length     = input.int(21, title='EMA 1 Length', minval=1)
-ema2Length     = input.int(200, title='EMA 2 Length', minval=1)
+// === Take Profit Multipliers ===
+tp1Multiplier = input.float(1.0, title='TP1 Multiplier', minval=0.1, step=0.1)
+tp2Multiplier = input.float(2.0, title='TP2 Multiplier', minval=0.1, step=0.1)
+tp3Multiplier = input.float(3.0, title='TP3 Multiplier', minval=0.1, step=0.1)
 
-// === VWAP & EMA Color Inputs ===
-vwapColor      = input.color(color.yellow, title='VWAP Color')
-ema1Color      = input.color(color.blue, title='EMA 1 Color')
-ema2Color      = input.color(color.red, title='EMA 2 Color')
-
-// === VWAP & EMA Label Text Color Inputs ===
-vwapTextColor  = input.color(color.black, title='VWAP Label Text Color')
-ema1TextColor  = input.color(color.white, title='EMA 1 Label Text Color')
-ema2TextColor  = input.color(color.white, title='EMA 2 Label Text Color')
-
-// === Session Label Color Inputs ===
-sess1LabelColor     = input.color(color.green, title='Session 1 Label Color')
-sess1LabelTextColor = input.color(color.white, title='Session 1 Label Text Color')
-sess2LabelColor     = input.color(color.blue, title='Session 2 Label Color')
-sess2LabelTextColor = input.color(color.white, title='Session 2 Label Text Color')
-sess3LabelColor     = input.color(color.purple, title='Session 3 Label Color')
-sess3LabelTextColor = input.color(color.white, title='Session 3 Label Text Color')
-
-// === TP Label Color Inputs ===
-tp1LabelColor       = input.color(color.green, title='TP1 Label Color')
-tp1LabelTextColor   = input.color(color.white, title='TP1 Label Text Color')
-tp2LabelColor       = input.color(color.orange, title='TP2 Label Color')
-tp2LabelTextColor   = input.color(color.black, title='TP2 Label Text Color')
-tp3LabelColor       = input.color(color.red, title='TP3 Label Color')
-tp3LabelTextColor   = input.color(color.white, title='TP3 Label Text Color')
-
-// === OR High/Low Label Color Inputs ===
-orbHighLabelColor     = input.color(color.blue, title='OR High Label Color')
-orbHighLabelTextColor = input.color(color.white, title='OR High Label Text Color')
-orbLowLabelColor      = input.color(color.red, title='OR Low Label Color')
-orbLowLabelTextColor  = input.color(color.white, title='OR Low Label Text Color')
-
-// === TP Multiplier Inputs ===
-tp1Multiplier  = input.float(1.0, title='TP1 Multiplier', minval=0.1, step=0.1, tooltip='Multiplier for first target (e.g. 1.0 = 1x range)')
-tp2Multiplier  = input.float(2.0, title='TP2 Multiplier', minval=0.1, step=0.1, tooltip='Multiplier for second target (e.g. 2.0 = 2x range)')
-tp3Multiplier  = input.float(3.0, title='TP3 Multiplier', minval=0.1, step=0.1, tooltip='Multiplier for third target (e.g. 3.0 = 3x range)')
-
-// === Label Size Selector ===
-labelSizeOpt = input.string("tiny", title="Label text size", options=["tiny","small","normal","large"])
-lblSize = labelSizeOpt == "tiny"  ? size.tiny  :
-          labelSizeOpt == "small" ? size.small :
-          labelSizeOpt == "large" ? size.large : size.normal
-
-// === ORB Shading Selector ===
-shadeEnable     = input.bool(false, title='Enable ORB Shading')
-shadeTransp     = input.int(80, title='ORB Shade Transparency (0 = opaque, 255 = invisible)', minval=0, maxval=255)
-
-// === Individual Session Fill Colors ===
-sess1ShadeColor = input.color(color.green, title='Session 1 Fill Color')
-sess2ShadeColor = input.color(color.blue, title='Session 2 Fill Color')
-sess3ShadeColor = input.color(color.purple, title='Session 3 Fill Color')
-
-// === Hide Logic ===
-hide = timeframe.isintraday and timeframe.multiplier <= orbTotalTime
-
-// === Session Flags ===
-time1       = sess1Enable ? time(timeframe.period, sess1 + ':1234567', user_timezone) : na
+// === Session Timing Logic ===
+time1 = sess1Enable ? time(timeframe.period, sess1 + ':1234567', user_timezone) : na
 in_session1 = not na(time1)
-is_first1   = in_session1 and not in_session1[1]
-// Session 1 ends when Session 2 starts (whether enabled or not)
-time1_end   = time(timeframe.period, sess2 + ':1234567', user_timezone)
-is_end1     = not na(time1_end) and na(time1_end[1])
+is_first1 = in_session1 and not in_session1[1]
+time1_end = time(timeframe.period, sess2 + ':1234567', user_timezone)
+is_end1 = not na(time1_end) and na(time1_end[1])
 
-time2       = sess2Enable ? time(timeframe.period, sess2 + ':1234567', user_timezone) : na
+time2 = sess2Enable ? time(timeframe.period, sess2 + ':1234567', user_timezone) : na
 in_session2 = not na(time2)
-is_first2   = in_session2 and not in_session2[1]
-// Session 2 ends when Session 3 starts (whether enabled or not)
-time2_end   = time(timeframe.period, sess3 + ':1234567', user_timezone)
-is_end2     = not na(time2_end) and na(time2_end[1])
+is_first2 = in_session2 and not in_session2[1]
+time2_end = time(timeframe.period, sess3 + ':1234567', user_timezone)
+is_end2 = not na(time2_end) and na(time2_end[1])
 
-time3       = sess3Enable ? time(timeframe.period, sess3 + ':1234567', user_timezone) : na
+time3 = sess3Enable ? time(timeframe.period, sess3 + ':1234567', user_timezone) : na
 in_session3 = not na(time3)
-is_first3   = in_session3 and not in_session3[1]
-// Session 3 ends at market close (using a reasonable end time)
-time3_end   = time(timeframe.period, '1600-1601:1234567', user_timezone)
-is_end3     = not na(time3_end) and na(time3_end[1])
+is_first3 = in_session3 and not in_session3[1]
+time3_end = time(timeframe.period, '1600-1601:1234567', user_timezone)
+is_end3 = not na(time3_end) and na(time3_end[1])
 
 // === ORB Storage ===
 var float orb_high1 = na
-var float orb_low1  = na
+var float orb_low1 = na
 var float orb_high2 = na
-var float orb_low2  = na
+var float orb_low2 = na
 var float orb_high3 = na
-var float orb_low3  = na
+var float orb_low3 = na
 
 // === Session Display Flags ===
 var bool show1 = false
 var bool show2 = false
 var bool show3 = false
 
+// === Trade Counter Per Session ===
+var int session1TradeCount = 0
+var int session2TradeCount = 0
+var int session3TradeCount = 0
+
 // === ORB Calculation ===
 if sess1Enable
     if is_first1
         orb_high1 := high
-        orb_low1  := low
+        orb_low1 := low
+        session1TradeCount := 0  // Reset trade counter
     else
         orb_high1 := orb_high1[1]
-        orb_low1  := orb_low1[1]
+        orb_low1 := orb_low1[1]
     if in_session1
         orb_high1 := math.max(orb_high1, high)
-        orb_low1  := math.min(orb_low1, low)
+        orb_low1 := math.min(orb_low1, low)
 
 if sess2Enable
     if is_first2
         orb_high2 := high
-        orb_low2  := low
+        orb_low2 := low
+        session2TradeCount := 0  // Reset trade counter
     else
         orb_high2 := orb_high2[1]
-        orb_low2  := orb_low2[1]
+        orb_low2 := orb_low2[1]
     if in_session2
         orb_high2 := math.max(orb_high2, high)
-        orb_low2  := math.min(orb_low2, low)
+        orb_low2 := math.min(orb_low2, low)
 
 if sess3Enable
     if is_first3
         orb_high3 := high
-        orb_low3  := low
+        orb_low3 := low
+        session3TradeCount := 0  // Reset trade counter
     else
         orb_high3 := orb_high3[1]
-        orb_low3  := orb_low3[1]
+        orb_low3 := orb_low3[1]
     if in_session3
         orb_high3 := math.max(orb_high3, high)
-        orb_low3  := math.min(orb_low3, low)
+        orb_low3 := math.min(orb_low3, low)
 
 // === Deltas ===
 delta1 = orb_high1 - orb_low1
@@ -178,96 +124,19 @@ volumeMA = ta.sma(volume, volumeMALength)
 volumeCondition = volume >= volumeMultiplier * volumeMA
 breakoutThreshold = breakoutPercent / 100.0
 
-// === Session Display & Labels ===
-
+// === Session Display Management ===
 if sess1Enable and is_first1
     show1 := true
     show2 := false
     show3 := false
-    if hide
-        // Create persistent session label that won't be deleted
-        sessionLabelPrice = orb_high1 + (tp3Multiplier + 1) * delta1
-        label.new(bar_index + 1, sessionLabelPrice, text=sess1Label + '\nRange: ' + str.tostring(delta1, format.mintick) + ' pts', style=label.style_label_down, color=sess1LabelColor, textcolor=sess1LabelTextColor, size=lblSize)
-
-        // Enhanced TP labels with multiplier, points and price data
-        tp1_points = tp1Multiplier * delta1
-        tp2_points = tp2Multiplier * delta1
-        tp3_points = tp3Multiplier * delta1
-        tp1_price_long = orb_high1 + tp1_points
-        tp2_price_long = orb_high1 + tp2_points
-        tp3_price_long = orb_high1 + tp3_points
-        tp1_price_short = orb_low1 - tp1_points
-        tp2_price_short = orb_low1 - tp2_points
-        tp3_price_short = orb_low1 - tp3_points
-
-        label.new(bar_index, tp1_price_long, 'TP1 (' + str.tostring(tp1Multiplier) + 'x)\n' + str.tostring(tp1_price_long, format.mintick), style=label.style_label_right, color=tp1LabelColor, textcolor=tp1LabelTextColor, size=lblSize)
-        label.new(bar_index, tp2_price_long, 'TP2 (' + str.tostring(tp2Multiplier) + 'x)\n' + str.tostring(tp2_price_long, format.mintick), style=label.style_label_right, color=tp2LabelColor, textcolor=tp2LabelTextColor, size=lblSize)
-        label.new(bar_index, tp3_price_long, 'TP3 (' + str.tostring(tp3Multiplier) + 'x)\n' + str.tostring(tp3_price_long, format.mintick), style=label.style_label_right, color=tp3LabelColor, textcolor=tp3LabelTextColor, size=lblSize)
-        label.new(bar_index, tp1_price_short, 'TP1 (' + str.tostring(tp1Multiplier) + 'x)\n' + str.tostring(tp1_price_short, format.mintick), style=label.style_label_right, color=tp1LabelColor, textcolor=tp1LabelTextColor, size=lblSize)
-        label.new(bar_index, tp2_price_short, 'TP2 (' + str.tostring(tp2Multiplier) + 'x)\n' + str.tostring(tp2_price_short, format.mintick), style=label.style_label_right, color=tp2LabelColor, textcolor=tp2LabelTextColor, size=lblSize)
-        label.new(bar_index, tp3_price_short, 'TP3 (' + str.tostring(tp3Multiplier) + 'x)\n' + str.tostring(tp3_price_short, format.mintick), style=label.style_label_right, color=tp3LabelColor, textcolor=tp3LabelTextColor, size=lblSize)
-
-        // OR High/Low labels
-        label.new(bar_index, orb_high1, 'OR High\n' + str.tostring(orb_high1, format.mintick), style=label.style_label_right, color=orbHighLabelColor, textcolor=orbHighLabelTextColor, size=lblSize)
-        label.new(bar_index, orb_low1, 'OR Low\n' + str.tostring(orb_low1, format.mintick), style=label.style_label_right, color=orbLowLabelColor, textcolor=orbLowLabelTextColor, size=lblSize)
-
 else if sess2Enable and is_first2
     show1 := false
     show2 := true
     show3 := false
-    if hide
-        // Create persistent session label that won't be deleted
-        sessionLabelPrice = orb_high2 + (tp3Multiplier + 1) * delta2
-        label.new(bar_index + 1, sessionLabelPrice, text=sess2Label + '\nRange: ' + str.tostring(delta2, format.mintick) + ' pts', style=label.style_label_down, color=sess2LabelColor, textcolor=sess2LabelTextColor, size=lblSize)
-
-        tp1_points = tp1Multiplier * delta2
-        tp2_points = tp2Multiplier * delta2
-        tp3_points = tp3Multiplier * delta2
-        tp1_price_long = orb_high2 + tp1_points
-        tp2_price_long = orb_high2 + tp2_points
-        tp3_price_long = orb_high2 + tp3_points
-        tp1_price_short = orb_low2 - tp1_points
-        tp2_price_short = orb_low2 - tp2_points
-        tp3_price_short = orb_low2 - tp3_points
-
-        label.new(bar_index, tp1_price_long, 'TP1 (' + str.tostring(tp1Multiplier) + 'x)\n' + str.tostring(tp1_price_long, format.mintick), style=label.style_label_right, color=tp1LabelColor, textcolor=tp1LabelTextColor, size=lblSize)
-        label.new(bar_index, tp2_price_long, 'TP2 (' + str.tostring(tp2Multiplier) + 'x)\n' + str.tostring(tp2_price_long, format.mintick), style=label.style_label_right, color=tp2LabelColor, textcolor=tp2LabelTextColor, size=lblSize)
-        label.new(bar_index, tp3_price_long, 'TP3 (' + str.tostring(tp3Multiplier) + 'x)\n' + str.tostring(tp3_price_long, format.mintick), style=label.style_label_right, color=tp3LabelColor, textcolor=tp3LabelTextColor, size=lblSize)
-        label.new(bar_index, tp1_price_short, 'TP1 (' + str.tostring(tp1Multiplier) + 'x)\n' + str.tostring(tp1_price_short, format.mintick), style=label.style_label_right, color=tp1LabelColor, textcolor=tp1LabelTextColor, size=lblSize)
-        label.new(bar_index, tp2_price_short, 'TP2 (' + str.tostring(tp2Multiplier) + 'x)\n' + str.tostring(tp2_price_short, format.mintick), style=label.style_label_right, color=tp2LabelColor, textcolor=tp2LabelTextColor, size=lblSize)
-        label.new(bar_index, tp3_price_short, 'TP3 (' + str.tostring(tp3Multiplier) + 'x)\n' + str.tostring(tp3_price_short, format.mintick), style=label.style_label_right, color=tp3LabelColor, textcolor=tp3LabelTextColor, size=lblSize)
-
-        label.new(bar_index, orb_high2, 'OR High\n' + str.tostring(orb_high2, format.mintick), style=label.style_label_right, color=orbHighLabelColor, textcolor=orbHighLabelTextColor, size=lblSize)
-        label.new(bar_index, orb_low2, 'OR Low\n' + str.tostring(orb_low2, format.mintick), style=label.style_label_right, color=orbLowLabelColor, textcolor=orbLowLabelTextColor, size=lblSize)
-
 else if sess3Enable and is_first3
     show1 := false
     show2 := false
     show3 := true
-    if hide
-        // Create persistent session label that won't be deleted
-        sessionLabelPrice = orb_high3 + (tp3Multiplier + 1) * delta3
-        label.new(bar_index + 1, sessionLabelPrice, text=sess3Label + '\nRange: ' + str.tostring(delta3, format.mintick) + ' pts', style=label.style_label_down, color=sess3LabelColor, textcolor=sess3LabelTextColor, size=lblSize)
-
-        tp1_points = tp1Multiplier * delta3
-        tp2_points = tp2Multiplier * delta3
-        tp3_points = tp3Multiplier * delta3
-        tp1_price_long = orb_high3 + tp1_points
-        tp2_price_long = orb_high3 + tp2_points
-        tp3_price_long = orb_high3 + tp3_points
-        tp1_price_short = orb_low3 - tp1_points
-        tp2_price_short = orb_low3 - tp2_points
-        tp3_price_short = orb_low3 - tp3_points
-
-        label.new(bar_index, tp1_price_long, 'TP1 (' + str.tostring(tp1Multiplier) + 'x)\n' + str.tostring(tp1_price_long, format.mintick), style=label.style_label_right, color=tp1LabelColor, textcolor=tp1LabelTextColor, size=lblSize)
-        label.new(bar_index, tp2_price_long, 'TP2 (' + str.tostring(tp2Multiplier) + 'x)\n' + str.tostring(tp2_price_long, format.mintick), style=label.style_label_right, color=tp2LabelColor, textcolor=tp2LabelTextColor, size=lblSize)
-        label.new(bar_index, tp3_price_long, 'TP3 (' + str.tostring(tp3Multiplier) + 'x)\n' + str.tostring(tp3_price_long, format.mintick), style=label.style_label_right, color=tp3LabelColor, textcolor=tp3LabelTextColor, size=lblSize)
-        label.new(bar_index, tp1_price_short, 'TP1 (' + str.tostring(tp1Multiplier) + 'x)\n' + str.tostring(tp1_price_short, format.mintick), style=label.style_label_right, color=tp1LabelColor, textcolor=tp1LabelTextColor, size=lblSize)
-        label.new(bar_index, tp2_price_short, 'TP2 (' + str.tostring(tp2Multiplier) + 'x)\n' + str.tostring(tp2_price_short, format.mintick), style=label.style_label_right, color=tp2LabelColor, textcolor=tp2LabelTextColor, size=lblSize)
-        label.new(bar_index, tp3_price_short, 'TP3 (' + str.tostring(tp3Multiplier) + 'x)\n' + str.tostring(tp3_price_short, format.mintick), style=label.style_label_right, color=tp3LabelColor, textcolor=tp3LabelTextColor, size=lblSize)
-
-        label.new(bar_index, orb_high3, 'OR High\n' + str.tostring(orb_high3, format.mintick), style=label.style_label_right, color=orbHighLabelColor, textcolor=orbHighLabelTextColor, size=lblSize)
-        label.new(bar_index, orb_low3, 'OR Low\n' + str.tostring(orb_low3, format.mintick), style=label.style_label_right, color=orbLowLabelColor, textcolor=orbLowLabelTextColor, size=lblSize)
 
 // Handle session end conditions
 if is_end1 and show1
@@ -277,37 +146,7 @@ if is_end2 and show2
 if is_end3 and show3
     show3 := false
 
-// === ORB Lines ===
-plot((show1 and hide) ? orb_high1 : na, style=plot.style_line, color=(orb_high1 == orb_high1[1] ? color.green  : na), title='ORB1 High', linewidth=2)
-plot((show1 and hide) ? orb_low1  : na, style=plot.style_line, color=(orb_low1  == orb_low1[1]  ? color.red    : na), title='ORB1 Low',  linewidth=2)
-plot((show2 and hide) ? orb_high2 : na, style=plot.style_line, color=(orb_high2 == orb_high2[1] ? color.blue   : na), title='ORB2 High', linewidth=2)
-plot((show2 and hide) ? orb_low2  : na, style=plot.style_line, color=(orb_low2  == orb_low2[1]  ? color.orange : na), title='ORB2 Low',  linewidth=2)
-plot((show3 and hide) ? orb_high3 : na, style=plot.style_line, color=(orb_high3 == orb_high3[1] ? color.purple : na), title='ORB3 High', linewidth=2)
-plot((show3 and hide) ? orb_low3  : na, style=plot.style_line, color=(orb_low3  == orb_low3[1]  ? color.yellow : na), title='ORB3 Low',  linewidth=2)
-
-// === Target Lines with Multipliers ===
-plot((show1 and hide) ? orb_high1 + tp1Multiplier * delta1 : na, style=plot.style_line, color=(orb_high1 == orb_high1[1] ? color.white : na), linewidth=1, title='S1 TP1')
-plot((show1 and hide) ? orb_high1 + tp2Multiplier * delta1 : na, style=plot.style_line, color=(orb_high1 == orb_high1[1] ? color.white : na), linewidth=1, title='S1 TP2')
-plot((show1 and hide) ? orb_high1 + tp3Multiplier * delta1 : na, style=plot.style_line, color=(orb_high1 == orb_high1[1] ? color.white : na), linewidth=1, title='S1 TP3')
-plot((show1 and hide) ? orb_low1  - tp1Multiplier * delta1 : na, style=plot.style_line, color=(orb_low1  == orb_low1[1]  ? color.white : na), linewidth=1, title='S1 TP1 Short')
-plot((show1 and hide) ? orb_low1  - tp2Multiplier * delta1 : na, style=plot.style_line, color=(orb_low1  == orb_low1[1]  ? color.white : na), linewidth=1, title='S1 TP2 Short')
-plot((show1 and hide) ? orb_low1  - tp3Multiplier * delta1 : na, style=plot.style_line, color=(orb_low1  == orb_low1[1]  ? color.white : na), linewidth=1, title='S1 TP3 Short')
-
-plot((show2 and hide) ? orb_high2 + tp1Multiplier * delta2 : na, style=plot.style_line, color=(orb_high2 == orb_high2[1] ? color.white : na), linewidth=1, title='S2 TP1')
-plot((show2 and hide) ? orb_high2 + tp2Multiplier * delta2 : na, style=plot.style_line, color=(orb_high2 == orb_high2[1] ? color.white : na), linewidth=1, title='S2 TP2')
-plot((show2 and hide) ? orb_high2 + tp3Multiplier * delta2 : na, style=plot.style_line, color=(orb_high2 == orb_high2[1] ? color.white : na), linewidth=1, title='S2 TP3')
-plot((show2 and hide) ? orb_low2  - tp1Multiplier * delta2 : na, style=plot.style_line, color=(orb_low2  == orb_low2[1]  ? color.white : na), linewidth=1, title='S2 TP1 Short')
-plot((show2 and hide) ? orb_low2  - tp2Multiplier * delta2 : na, style=plot.style_line, color=(orb_low2  == orb_low2[1]  ? color.white : na), linewidth=1, title='S2 TP2 Short')
-plot((show2 and hide) ? orb_low2  - tp3Multiplier * delta2 : na, style=plot.style_line, color=(orb_low2  == orb_low2[1]  ? color.white : na), linewidth=1, title='S2 TP3 Short')
-
-plot((show3 and hide) ? orb_high3 + tp1Multiplier * delta3 : na, style=plot.style_line, color=(orb_high3 == orb_high3[1] ? color.white : na), linewidth=1, title='S3 TP1')
-plot((show3 and hide) ? orb_high3 + tp2Multiplier * delta3 : na, style=plot.style_line, color=(orb_high3 == orb_high3[1] ? color.white : na), linewidth=1, title='S3 TP2')
-plot((show3 and hide) ? orb_high3 + tp3Multiplier * delta3 : na, style=plot.style_line, color=(orb_high3 == orb_high3[1] ? color.white : na), linewidth=1, title='S3 TP3')
-plot((show3 and hide) ? orb_low3  - tp1Multiplier * delta3 : na, style=plot.style_line, color=(orb_low3  == orb_low3[1]  ? color.white : na), linewidth=1, title='S3 TP1 Short')
-plot((show3 and hide) ? orb_low3  - tp2Multiplier * delta3 : na, style=plot.style_line, color=(orb_low3  == orb_low3[1]  ? color.white : na), linewidth=1, title='S3 TP2 Short')
-plot((show3 and hide) ? orb_low3  - tp3Multiplier * delta3 : na, style=plot.style_line, color=(orb_low3  == orb_low3[1]  ? color.white : na), linewidth=1, title='S3 TP3 Short')
-
-// === Trade Signals on 5-min with Volume and Breakout Confirmation ===
+// === Trade Signals ===
 is5min = timeframe.isintraday and timeframe.multiplier == 5
 
 // Session 1 signals
@@ -315,119 +154,55 @@ long1Breakout = (close - orb_high1) >= (breakoutThreshold * delta1)
 short1Breakout = (orb_low1 - close) >= (breakoutThreshold * delta1)
 long1Basic = is5min and show1 and open < orb_high1 and close > orb_high1
 short1Basic = is5min and show1 and open > orb_low1 and close < orb_low1
-long1  = long1Basic and volumeCondition and long1Breakout
-short1 = short1Basic and volumeCondition and short1Breakout
-
-// Debug labels for Session 1
-if is5min and show1
-    if long1Basic and (showAllBreakouts or (showSuccessfulBreakouts and long1))
-        debugText = 'S1 LONG DEBUG:\n'
-        debugText := debugText + 'ORB Breakout: ✓\n'
-        debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗') + ' (' + str.tostring(volume/volumeMA, '#.##') + 'x MA)\n'
-        debugText := debugText + 'Breakout %: ' + (long1Breakout ? '✓' : '✗') + ' (' + str.tostring((close - orb_high1)/delta1 * 100, '#.#') + '%)\n'
-        debugText := debugText + 'Signal: ' + (long1 ? 'TRIGGERED' : 'FAILED')
-        label.new(bar_index, high + (2 * delta1), debugText, style=label.style_label_down, color=color.yellow, textcolor=color.black, size=size.tiny)
-
-    if short1Basic and (showAllBreakouts or (showSuccessfulBreakouts and short1))
-        debugText = 'S1 SHORT DEBUG:\n'
-        debugText := debugText + 'ORB Breakout: ✓\n'
-        debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗') + ' (' + str.tostring(volume/volumeMA, '#.##') + 'x MA)\n'
-        debugText := debugText + 'Breakout %: ' + (short1Breakout ? '✓' : '✗') + ' (' + str.tostring((orb_low1 - close)/delta1 * 100, '#.#') + '%)\n'
-        debugText := debugText + 'Signal: ' + (short1 ? 'TRIGGERED' : 'FAILED')
-        label.new(bar_index, low - (2 * delta1), debugText, style=label.style_label_up, color=color.yellow, textcolor=color.black, size=size.tiny)
-
-plotshape(long1,  title='Long ORB1',  style=shape.triangleup,   location=location.abovebar, color=color.green, size=size.tiny)
-plotshape(short1, title='Short ORB1', style=shape.triangledown, location=location.belowbar, color=color.red,   size=size.tiny)
+long1 = long1Basic and volumeCondition and long1Breakout and session1TradeCount < maxTradesPerSession
+short1 = short1Basic and volumeCondition and short1Breakout and session1TradeCount < maxTradesPerSession
 
 // Session 2 signals
 long2Breakout = (close - orb_high2) >= (breakoutThreshold * delta2)
 short2Breakout = (orb_low2 - close) >= (breakoutThreshold * delta2)
 long2Basic = is5min and show2 and open < orb_high2 and close > orb_high2
 short2Basic = is5min and show2 and open > orb_low2 and close < orb_low2
-long2  = long2Basic and volumeCondition and long2Breakout
-short2 = short2Basic and volumeCondition and short2Breakout
-
-// Debug labels for Session 2
-if is5min and show2
-    if long2Basic and (showAllBreakouts or (showSuccessfulBreakouts and long2))
-        debugText = 'S2 LONG DEBUG:\n'
-        debugText := debugText + 'ORB Breakout: ✓\n'
-        debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗') + ' (' + str.tostring(volume/volumeMA, '#.##') + 'x MA)\n'
-        debugText := debugText + 'Breakout %: ' + (long2Breakout ? '✓' : '✗') + ' (' + str.tostring((close - orb_high2)/delta2 * 100, '#.#') + '%)\n'
-        debugText := debugText + 'Signal: ' + (long2 ? 'TRIGGERED' : 'FAILED')
-        label.new(bar_index, high + (2 * delta2), debugText, style=label.style_label_down, color=color.yellow, textcolor=color.black, size=size.tiny)
-
-    if short2Basic and (showAllBreakouts or (showSuccessfulBreakouts and short2))
-        debugText = 'S2 SHORT DEBUG:\n'
-        debugText := debugText + 'ORB Breakout: ✓\n'
-        debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗') + ' (' + str.tostring(volume/volumeMA, '#.##') + 'x MA)\n'
-        debugText := debugText + 'Breakout %: ' + (short2Breakout ? '✓' : '✗') + ' (' + str.tostring((orb_low2 - close)/delta2 * 100, '#.#') + '%)\n'
-        debugText := debugText + 'Signal: ' + (short2 ? 'TRIGGERED' : 'FAILED')
-        label.new(bar_index, low - (2 * delta2), debugText, style=label.style_label_up, color=color.yellow, textcolor=color.black, size=size.tiny)
-
-plotshape(long2,  title='Long ORB2',  style=shape.triangleup,   location=location.abovebar, color=color.blue,  size=size.tiny)
-plotshape(short2, title='Short ORB2', style=shape.triangledown, location=location.belowbar, color=color.orange,size=size.tiny)
+long2 = long2Basic and volumeCondition and long2Breakout and session2TradeCount < maxTradesPerSession
+short2 = short2Basic and volumeCondition and short2Breakout and session2TradeCount < maxTradesPerSession
 
 // Session 3 signals
 long3Breakout = (close - orb_high3) >= (breakoutThreshold * delta3)
 short3Breakout = (orb_low3 - close) >= (breakoutThreshold * delta3)
 long3Basic = is5min and show3 and open < orb_high3 and close > orb_high3
 short3Basic = is5min and show3 and open > orb_low3 and close < orb_low3
-long3  = long3Basic and volumeCondition and long3Breakout
-short3 = short3Basic and volumeCondition and short3Breakout
+long3 = long3Basic and volumeCondition and long3Breakout and session3TradeCount < maxTradesPerSession
+short3 = short3Basic and volumeCondition and short3Breakout and session3TradeCount < maxTradesPerSession
 
-// Debug labels for Session 3
-if is5min and show3
-    if long3Basic and (showAllBreakouts or (showSuccessfulBreakouts and long3))
-        debugText = 'S3 LONG DEBUG:\n'
-        debugText := debugText + 'ORB Breakout: ✓\n'
-        debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗') + ' (' + str.tostring(volume/volumeMA, '#.##') + 'x MA)\n'
-        debugText := debugText + 'Breakout %: ' + (long3Breakout ? '✓' : '✗') + ' (' + str.tostring((close - orb_high3)/delta3 * 100, '#.#') + '%)\n'
-        debugText := debugText + 'Signal: ' + (long3 ? 'TRIGGERED' : 'FAILED')
-        label.new(bar_index, high + (2 * delta3), debugText, style=label.style_label_down, color=color.yellow, textcolor=color.black, size=size.tiny)
-
-    if short3Basic and (showAllBreakouts or (showSuccessfulBreakouts and short3))
-        debugText = 'S3 SHORT DEBUG:\n'
-        debugText := debugText + 'ORB Breakout: ✓\n'
-        debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗') + ' (' + str.tostring(volume/volumeMA, '#.##') + 'x MA)\n'
-        debugText := debugText + 'Breakout %: ' + (short3Breakout ? '✓' : '✗') + ' (' + str.tostring((orb_low3 - close)/delta3 * 100, '#.#') + '%)\n'
-        debugText := debugText + 'Signal: ' + (short3 ? 'TRIGGERED' : 'FAILED')
-        label.new(bar_index, low - (2 * delta3), debugText, style=label.style_label_up, color=color.yellow, textcolor=color.black, size=size.tiny)
-
-plotshape(long3,  title='Long ORB3',  style=shape.triangleup,   location=location.abovebar, color=color.purple,size=size.tiny)
-plotshape(short3, title='Short ORB3', style=shape.triangledown, location=location.belowbar, color=color.yellow,size=size.tiny)
-
-// === RUBBER BAND REVERSAL SIGNALS: Directional ===
+// === Rubber Band Reversal Signals ===
 rubberBandLong = false
 rubberBandShort = false
 
-// Rubber band logic: fade the breakout when it reverses with volume
 if enableRubberBand and is5min and volume >= rbVolumeMultiplier * volumeMA
-    // Check for previous ORB signals
     prevOrbLong = long1[1] or long2[1] or long3[1]
     prevOrbShort = short1[1] or short2[1] or short3[1]
 
     if prevOrbLong or prevOrbShort
-        // Calculate reversal metrics
         prevCandleRange = high[1] - low[1]
         reversalThreshold = rbReversalPercent / 100.0
 
         if prevCandleRange > 0
-            // After LONG ORB breakout: if price reverses DOWN = RUBBER BAND SHORT signal
             if prevOrbLong
-                pullbackAmount = high[1] - close  // How much we pulled back from prev high
+                pullbackAmount = high[1] - close
                 if pullbackAmount >= (reversalThreshold * prevCandleRange)
-                    rubberBandShort := true
+                    // Check trade count for current session
+                    canTrade = (show1 and session1TradeCount < maxTradesPerSession) or
+                               (show2 and session2TradeCount < maxTradesPerSession) or
+                               (show3 and session3TradeCount < maxTradesPerSession)
+                    rubberBandShort := canTrade
 
-            // After SHORT ORB breakout: if price reverses UP = RUBBER BAND LONG signal
             if prevOrbShort
-                bounceAmount = close - low[1]  // How much we bounced from prev low
+                bounceAmount = close - low[1]
                 if bounceAmount >= (reversalThreshold * prevCandleRange)
-                    rubberBandLong := true
-
-// Plot rubber band signals
-plotshape(rubberBandLong, title='Rubber Band Long', style=shape.circle, location=location.belowbar, color=color.new(color.lime, 0), size=size.small)
-plotshape(rubberBandShort, title='Rubber Band Short', style=shape.circle, location=location.abovebar, color=color.new(color.fuchsia, 0), size=size.small)
+                    // Check trade count for current session
+                    canTrade = (show1 and session1TradeCount < maxTradesPerSession) or
+                               (show2 and session2TradeCount < maxTradesPerSession) or
+                               (show3 and session3TradeCount < maxTradesPerSession)
+                    rubberBandLong := canTrade
 
 // === STRATEGY ENTRIES ===
 
@@ -448,6 +223,7 @@ if long1
     strategy.exit("L1_TP1", from_entry=LONG1_ID, limit=orb_high1 + tp1Multiplier * delta1, stop=stopLoss, qty_percent=33)
     strategy.exit("L1_TP2", from_entry=LONG1_ID, limit=orb_high1 + tp2Multiplier * delta1, stop=stopLoss, qty_percent=33)
     strategy.exit("L1_TP3", from_entry=LONG1_ID, limit=orb_high1 + tp3Multiplier * delta1, stop=stopLoss, qty_percent=34)
+    session1TradeCount := session1TradeCount + 1
 
 if short1
     stopLoss = orb_high1 + (stopLossMultiplier * delta1)
@@ -455,6 +231,7 @@ if short1
     strategy.exit("S1_TP1", from_entry=SHORT1_ID, limit=orb_low1 - tp1Multiplier * delta1, stop=stopLoss, qty_percent=33)
     strategy.exit("S1_TP2", from_entry=SHORT1_ID, limit=orb_low1 - tp2Multiplier * delta1, stop=stopLoss, qty_percent=33)
     strategy.exit("S1_TP3", from_entry=SHORT1_ID, limit=orb_low1 - tp3Multiplier * delta1, stop=stopLoss, qty_percent=34)
+    session1TradeCount := session1TradeCount + 1
 
 // Session 2 entries
 if long2
@@ -463,6 +240,7 @@ if long2
     strategy.exit("L2_TP1", from_entry=LONG2_ID, limit=orb_high2 + tp1Multiplier * delta2, stop=stopLoss, qty_percent=33)
     strategy.exit("L2_TP2", from_entry=LONG2_ID, limit=orb_high2 + tp2Multiplier * delta2, stop=stopLoss, qty_percent=33)
     strategy.exit("L2_TP3", from_entry=LONG2_ID, limit=orb_high2 + tp3Multiplier * delta2, stop=stopLoss, qty_percent=34)
+    session2TradeCount := session2TradeCount + 1
 
 if short2
     stopLoss = orb_high2 + (stopLossMultiplier * delta2)
@@ -470,6 +248,7 @@ if short2
     strategy.exit("S2_TP1", from_entry=SHORT2_ID, limit=orb_low2 - tp1Multiplier * delta2, stop=stopLoss, qty_percent=33)
     strategy.exit("S2_TP2", from_entry=SHORT2_ID, limit=orb_low2 - tp2Multiplier * delta2, stop=stopLoss, qty_percent=33)
     strategy.exit("S2_TP3", from_entry=SHORT2_ID, limit=orb_low2 - tp3Multiplier * delta2, stop=stopLoss, qty_percent=34)
+    session2TradeCount := session2TradeCount + 1
 
 // Session 3 entries
 if long3
@@ -478,6 +257,7 @@ if long3
     strategy.exit("L3_TP1", from_entry=LONG3_ID, limit=orb_high3 + tp1Multiplier * delta3, stop=stopLoss, qty_percent=33)
     strategy.exit("L3_TP2", from_entry=LONG3_ID, limit=orb_high3 + tp2Multiplier * delta3, stop=stopLoss, qty_percent=33)
     strategy.exit("L3_TP3", from_entry=LONG3_ID, limit=orb_high3 + tp3Multiplier * delta3, stop=stopLoss, qty_percent=34)
+    session3TradeCount := session3TradeCount + 1
 
 if short3
     stopLoss = orb_high3 + (stopLossMultiplier * delta3)
@@ -485,22 +265,35 @@ if short3
     strategy.exit("S3_TP1", from_entry=SHORT3_ID, limit=orb_low3 - tp1Multiplier * delta3, stop=stopLoss, qty_percent=33)
     strategy.exit("S3_TP2", from_entry=SHORT3_ID, limit=orb_low3 - tp2Multiplier * delta3, stop=stopLoss, qty_percent=33)
     strategy.exit("S3_TP3", from_entry=SHORT3_ID, limit=orb_low3 - tp3Multiplier * delta3, stop=stopLoss, qty_percent=34)
+    session3TradeCount := session3TradeCount + 1
 
-// Rubber Band entries (counter-trend, smaller position)
+// Rubber Band entries
 if rubberBandLong
-    // Use the current session's delta for stop calculation
     currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
     stopLoss = low - (stopLossMultiplier * currentDelta)
     strategy.entry(RB_LONG_ID, strategy.long, comment="RB_L")
     strategy.exit("RB_L_Exit", from_entry=RB_LONG_ID, limit=high + currentDelta, stop=stopLoss)
+    // Increment appropriate session counter
+    if show1
+        session1TradeCount := session1TradeCount + 1
+    else if show2
+        session2TradeCount := session2TradeCount + 1
+    else if show3
+        session3TradeCount := session3TradeCount + 1
 
 if rubberBandShort
-    // Use the current session's delta for stop calculation
     currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
     stopLoss = high + (stopLossMultiplier * currentDelta)
     strategy.entry(RB_SHORT_ID, strategy.short, comment="RB_S")
     strategy.exit("RB_S_Exit", from_entry=RB_SHORT_ID, limit=low - currentDelta, stop=stopLoss)
+    // Increment appropriate session counter
+    if show1
+        session1TradeCount := session1TradeCount + 1
+    else if show2
+        session2TradeCount := session2TradeCount + 1
+    else if show3
+        session3TradeCount := session3TradeCount + 1
 
-// Close all positions at session end to prevent holding overnight
+// Close all positions at session end
 if is_end1 or is_end2 or is_end3
     strategy.close_all(comment="Session End")
