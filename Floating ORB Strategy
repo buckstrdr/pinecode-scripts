@@ -74,63 +74,19 @@ if showFailedConditions and strategy.position_size == 0
         debugText := debugText + 'Time: ' + (inTradingWindow ? '✓' : '✗ Outside hours')
         label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.orange, 0), textcolor=color.black, size=size.tiny)
 
-// === Track Position State ===
-var float entryPrice = na
-var float currentStopLoss = na
-var int tradeDirection = 0  // 1 = long, -1 = short, 0 = no position
-var bool firstTrailMove = false  // Track if we've made the first SL adjustment
-var float lastCandleClose = na  // Track previous candle close for trailing
-
-// === Entry Logic ===
-if triggerLong and strategy.position_size == 0
-    entryPrice := close
-    currentStopLoss := low
-    tradeDirection := 1
-    firstTrailMove := true
-    lastCandleClose := close
-    strategy.entry('Long', strategy.long, comment='Long Entry')
-
+// === ULTRA SIMPLIFIED ENTRY FOR TESTING ===
+// Just the most basic entry possible - no var tracking, no exits
+if triggerLong
+    strategy.entry('Long', strategy.long)
     if showDebugLabels
-        label.new(bar_index, high, '🟢 LONG ENTRY CALLED\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(low, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
+        label.new(bar_index, high, '🟢 LONG ENTRY\nPrice: ' + str.tostring(close, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
                   style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=size.normal)
 
-if triggerShort and strategy.position_size == 0
-    entryPrice := close
-    currentStopLoss := high
-    tradeDirection := -1
-    firstTrailMove := true
-    lastCandleClose := close
-    strategy.entry('Short', strategy.short, comment='Short Entry')
-
+if triggerShort
+    strategy.entry('Short', strategy.short)
     if showDebugLabels
-        label.new(bar_index, low, '🔴 SHORT ENTRY CALLED\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(high, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
+        label.new(bar_index, low, '🔴 SHORT ENTRY\nPrice: ' + str.tostring(close, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x',
                   style=label.style_label_up, color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.normal)
-
-// === Place Exit Orders Once Position is Open ===
-if strategy.position_size > 0 and tradeDirection == 1
-    strategy.exit('Long SL', 'Long', stop=currentStopLoss)
-
-if strategy.position_size < 0 and tradeDirection == -1
-    strategy.exit('Short SL', 'Short', stop=currentStopLoss)
-
-// === Trailing Stop Logic DISABLED FOR TESTING ===
-// Basic strategy: Entry + Fixed Stop Loss only
-// Trailing logic will be added back after confirming basic execution works
-
-// === Close Positions Outside Trading Hours ===
-if closeOutsideHours and not inTradingWindow
-    if strategy.position_size > 0
-        strategy.close('Long', comment='Outside Trading Hours')
-    if strategy.position_size < 0
-        strategy.close('Short', comment='Outside Trading Hours')
-
-// === Reset on Position Close ===
-if strategy.position_size == 0 and strategy.position_size[1] != 0
-    entryPrice := na
-    currentStopLoss := na
-    tradeDirection := 0
-    firstTrailMove := false
-    lastCandleClose := na
 
 // === Visual Reference ===
 // Plot entry signals
