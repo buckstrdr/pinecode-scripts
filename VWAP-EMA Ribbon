@@ -1,0 +1,81 @@
+//@version=6
+// DISCLAIMER: This indicator is provided "as is" for educational purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
+indicator('VWAP-EMA Ribbon by BucksTRDR', overlay=true)
+
+// === EMA Inputs ===
+ema1Length = input.int(5, title='EMA 1 Length', minval=1, group='EMAs')
+ema2Length = input.int(9, title='EMA 2 Length', minval=1, group='EMAs')
+ema3Length = input.int(21, title='EMA 3 Length', minval=1, group='EMAs')
+ema4Length = input.int(50, title='EMA 4 Length', minval=1, group='EMAs')
+ema5Length = input.int(200, title='EMA 5 Length', minval=1, group='EMAs')
+
+// === EMA Color Inputs ===
+ema1Color = input.color(color.new(color.aqua, 0), title='EMA 1 Color (5)', group='EMA Colors')
+ema2Color = input.color(color.new(color.lime, 0), title='EMA 2 Color (9)', group='EMA Colors')
+ema3Color = input.color(color.new(color.yellow, 0), title='EMA 3 Color (21)', group='EMA Colors')
+ema4Color = input.color(color.new(color.orange, 0), title='EMA 4 Color (50)', group='EMA Colors')
+ema5Color = input.color(color.new(color.red, 0), title='EMA 5 Color (200)', group='EMA Colors')
+
+// === VWAP Inputs ===
+vwapSessionColor = input.color(color.new(color.blue, 0), title='VWAP Session Color', group='VWAP Colors')
+vwapWeeklyColor = input.color(color.new(color.fuchsia, 0), title='VWAP Weekly Color', group='VWAP Colors')
+
+// === Line Width Inputs ===
+vwapLineWidth = input.int(4, title='VWAP Line Width', minval=1, maxval=10, group='Line Widths')
+emaLineWidth = input.int(2, title='EMA Line Width', minval=1, maxval=10, group='Line Widths')
+
+// === Enable/Disable Inputs ===
+showEMA1 = input.bool(true, title='Show EMA 1 (5)', group='Display')
+showEMA2 = input.bool(true, title='Show EMA 2 (9)', group='Display')
+showEMA3 = input.bool(true, title='Show EMA 3 (21)', group='Display')
+showEMA4 = input.bool(true, title='Show EMA 4 (50)', group='Display')
+showEMA5 = input.bool(true, title='Show EMA 5 (200)', group='Display')
+showVWAPSession = input.bool(true, title='Show VWAP Session', group='Display')
+showVWAPWeekly = input.bool(true, title='Show VWAP Weekly', group='Display')
+
+// === Calculate EMAs ===
+ema1 = ta.ema(close, ema1Length)
+ema2 = ta.ema(close, ema2Length)
+ema3 = ta.ema(close, ema3Length)
+ema4 = ta.ema(close, ema4Length)
+ema5 = ta.ema(close, ema5Length)
+
+// === Calculate VWAPs ===
+// Session VWAP (resets daily)
+vwapSession = ta.vwap(close)
+
+// Weekly VWAP (resets weekly)
+var float vwapWeeklyCumVol = 0.0
+var float vwapWeeklyCumVolPrice = 0.0
+var int lastWeek = 0
+
+currentWeek = weekofyear(time)
+isNewWeek = currentWeek != lastWeek
+
+if isNewWeek
+    vwapWeeklyCumVol := volume
+    vwapWeeklyCumVolPrice := volume * close
+    lastWeek := currentWeek
+else
+    vwapWeeklyCumVol += volume
+    vwapWeeklyCumVolPrice += volume * close
+
+vwapWeekly = vwapWeeklyCumVolPrice / vwapWeeklyCumVol
+
+// === Plot EMAs ===
+plot(showEMA1 ? ema1 : na, title='EMA 1 (5)', color=ema1Color, linewidth=emaLineWidth)
+plot(showEMA2 ? ema2 : na, title='EMA 2 (9)', color=ema2Color, linewidth=emaLineWidth)
+plot(showEMA3 ? ema3 : na, title='EMA 3 (21)', color=ema3Color, linewidth=emaLineWidth)
+plot(showEMA4 ? ema4 : na, title='EMA 4 (50)', color=ema4Color, linewidth=emaLineWidth)
+plot(showEMA5 ? ema5 : na, title='EMA 5 (200)', color=ema5Color, linewidth=emaLineWidth)
+
+// === Plot VWAPs ===
+plot(showVWAPSession ? vwapSession : na, title='VWAP Session', color=vwapSessionColor, linewidth=vwapLineWidth, style=plot.style_line)
+plot(showVWAPWeekly ? vwapWeekly : na, title='VWAP Weekly', color=vwapWeeklyColor, linewidth=vwapLineWidth, style=plot.style_line)
+
+// === Optional: EMA Ribbon Fill (comment out if not needed) ===
+// Uncomment the lines below to add fills between EMAs for a ribbon effect
+// fill(plot(ema1), plot(ema2), color=color.new(ema1Color, 90))
+// fill(plot(ema2), plot(ema3), color=color.new(ema2Color, 90))
+// fill(plot(ema3), plot(ema4), color=color.new(ema3Color, 90))
+// fill(plot(ema4), plot(ema5), color=color.new(ema4Color, 90))
