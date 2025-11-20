@@ -22,6 +22,7 @@ highlighting = input.bool(title='Highlighter On/Off?', defval=true, group='Displ
 // === Strategy Settings ===
 useTakeProfit = input.bool(title='Use Take Profit', defval=true, group='Risk Management', tooltip='Enable RR-based take profit')
 riskRewardRatio = input.float(title='Risk:Reward Ratio', defval=2.0, minval=0.5, step=0.5, group='Risk Management', tooltip='Risk-reward ratio for take profit (e.g., 2.0 = 2:1)')
+lookbackCandles = input.int(title='Stop Loss Lookback Candles', defval=3, minval=1, maxval=10, group='Risk Management', tooltip='Number of previous candles to find highest/lowest for stop loss')
 
 // === End of Day Close ===
 enableEODClose = input.bool(title='Enable End of Day Close', defval=true, group='Time Filter', tooltip='Close all positions at specific time')
@@ -71,7 +72,8 @@ var float riskAmount = na
 // Long Entry: When Supertrend flips to bullish
 if buySignal
     entryPrice := close
-    initialStop := up  // Use the GREEN Supertrend line as stop for longs
+    // Find the lowest low of previous N candles for stop loss
+    initialStop := ta.lowest(low, lookbackCandles)[1]  // [1] to skip current candle
 
     // Calculate risk and take profit
     riskAmount := entryPrice - initialStop
@@ -80,13 +82,14 @@ if buySignal
     strategy.entry('Long', strategy.long, comment='Long Entry')
 
     if showsignals
-        debugText = '🟢 LONG\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + '\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
+        debugText = '🟢 LONG\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + ' (' + str.tostring(lookbackCandles) + ' candle low)\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
         label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
 
 // Short Entry: When Supertrend flips to bearish
 if sellSignal
     entryPrice := close
-    initialStop := dn  // Use the RED Supertrend line as stop for shorts
+    // Find the highest high of previous N candles for stop loss
+    initialStop := ta.highest(high, lookbackCandles)[1]  // [1] to skip current candle
 
     // Calculate risk and take profit
     riskAmount := initialStop - entryPrice
@@ -95,7 +98,7 @@ if sellSignal
     strategy.entry('Short', strategy.short, comment='Short Entry')
 
     if showsignals
-        debugText = '🔴 SHORT\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + '\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
+        debugText = '🔴 SHORT\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + ' (' + str.tostring(lookbackCandles) + ' candle high)\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
         label.new(bar_index, high, debugText, style=label.style_label_down, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
 
 // === RR-Based Trailing Stop Management ===
