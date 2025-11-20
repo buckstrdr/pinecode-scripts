@@ -57,8 +57,9 @@ trend := nz(trend[1], trend)
 trend := trend == -1 and close > dn1 ? 1 : trend == 1 and close < up1 ? -1 : trend
 
 // === Signals ===
-buySignal = trend == 1 and trend[1] == -1
-sellSignal = trend == -1 and trend[1] == 1
+// Only generate signals when flat (no open position)
+buySignal = trend == 1 and trend[1] == -1 and strategy.position_size == 0 and not tooCloseToEOD
+sellSignal = trend == -1 and trend[1] == 1 and strategy.position_size == 0 and not tooCloseToEOD
 
 // === Track Entry Price and Initial Stop ===
 var float entryPrice = na
@@ -68,7 +69,7 @@ var float riskAmount = na
 
 // === Strategy Logic ===
 // Long Entry: When Supertrend flips to bullish
-if buySignal and strategy.position_size == 0 and not tooCloseToEOD
+if buySignal
     entryPrice := close
     initialStop := up  // Use the GREEN Supertrend line as stop for longs
 
@@ -83,7 +84,7 @@ if buySignal and strategy.position_size == 0 and not tooCloseToEOD
         label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
 
 // Short Entry: When Supertrend flips to bearish
-if sellSignal and strategy.position_size == 0 and not tooCloseToEOD
+if sellSignal
     entryPrice := close
     initialStop := dn  // Use the RED Supertrend line as stop for shorts
 
