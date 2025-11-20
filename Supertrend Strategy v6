@@ -27,18 +27,15 @@ atr2 = ta.sma(ta.tr, Periods)
 atr = changeATR ? ta.atr(Periods) : atr2
 
 // === Supertrend Calculation ===
-var float up = na
-var float dn = na
-var int trend = 1
+up = src - (Multiplier * atr)
+up1 = nz(up[1], up)
+up := close[1] > up1 ? math.max(up, up1) : up
 
-upBasic = src - (Multiplier * atr)
-up1 = nz(up[1], upBasic)
-up := close[1] > up1 ? math.max(upBasic, up1) : upBasic
+dn = src + (Multiplier * atr)
+dn1 = nz(dn[1], dn)
+dn := close[1] < dn1 ? math.min(dn, dn1) : dn
 
-dnBasic = src + (Multiplier * atr)
-dn1 = nz(dn[1], dnBasic)
-dn := close[1] < dn1 ? math.min(dnBasic, dn1) : dnBasic
-
+trend = 1
 trend := nz(trend[1], trend)
 trend := trend == -1 and close > dn1 ? 1 : trend == 1 and close < up1 ? -1 : trend
 
