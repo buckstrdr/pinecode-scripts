@@ -1,0 +1,457 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © buckstrdr
+
+//@version=5
+strategy("1-Min EMA Scalping Strategy - NQ Futures",
+     shorttitle="NQ EMA Scalp",
+     overlay=true,
+     pyramiding=1,
+     initial_capital=10000,
+     default_qty_type=strategy.fixed,
+     default_qty_value=1,
+     commission_type=strategy.commission.cash_per_contract,
+     commission_value=5.0,  // $5 round trip ($2.50 per side)
+     slippage=1,
+     calc_on_every_tick=false,  // No repainting - only on bar close
+     calc_on_order_fills=false)
+
+// ============================================================================
+// INPUT PARAMETERS
+// ============================================================================
+
+// EMA Settings
+ema10_period = input.int(10, "10 EMA Period", minval=1, group="EMA Settings")
+ema20_period = input.int(20, "20 EMA Period", minval=1, group="EMA Settings")
+ema50_period = input.int(50, "50 EMA Period", minval=1, group="EMA Settings")
+
+// ATR Settings
+atr_period = input.int(14, "ATR Period", minval=1, group="ATR Settings")
+
+// Trend Slope Thresholds (normalized by ATR)
+slope10_threshold = input.float(2.0, "10 EMA Slope Threshold", step=0.1, group="Trend Thresholds")
+slope20_threshold = input.float(1.5, "20 EMA Slope Threshold", step=0.1, group="Trend Thresholds")
+slope50_threshold = input.float(1.0, "50 EMA Slope Threshold", step=0.1, group="Trend Thresholds")
+
+// EMA Separation Thresholds (percentage)
+sep_10_20_threshold = input.float(0.15, "10-20 EMA Separation %", step=0.01, group="Trend Thresholds")
+sep_20_50_threshold = input.float(0.25, "20-50 EMA Separation %", step=0.01, group="Trend Thresholds")
+
+// Fog Zone Thresholds
+fog_sep_10_20 = input.float(0.1, "Fog Zone 10-20 Separation %", step=0.01, group="Trend Thresholds")
+fog_sep_20_50 = input.float(0.15, "Fog Zone 20-50 Separation %", step=0.01, group="Trend Thresholds")
+
+// Pullback Detection
+pullback_tolerance = input.float(0.2, "Pullback Touch Tolerance %", step=0.01, group="Entry Settings")
+
+// Profit Targets and Stop Loss (for NQ futures)
+target_ticks = input.int(40, "Target (Ticks)", minval=1, group="Exit Settings", tooltip="40 ticks = $200 for NQ")
+stop_ticks = input.int(50, "Stop Loss (Points)", minval=1, group="Exit Settings", tooltip="50 points = $250 for NQ")
+
+// Risk Management
+max_trades_per_day = input.int(5, "Max Trades Per Day", minval=1, group="Risk Management")
+max_consecutive_losses = input.int(2, "Max Consecutive Losses", minval=1, group="Risk Management")
+
+// Trading Time Filter (EST)
+use_time_filter = input.bool(true, "Use Time Filter", group="Time Filter")
+start_hour = input.int(9, "Start Hour (EST)", minval=0, maxval=23, group="Time Filter")
+start_minute = input.int(30, "Start Minute", minval=0, maxval=59, group="Time Filter")
+end_hour = input.int(11, "End Hour (EST)", minval=0, maxval=23, group="Time Filter")
+end_minute = input.int(0, "End Minute", minval=0, maxval=59, group="Time Filter")
+
+// ============================================================================
+// CORE INDICATORS
+// ============================================================================
+
+// Calculate EMAs
+ema10 = ta.ema(close, ema10_period)
+ema20 = ta.ema(close, ema20_period)
+ema50 = ta.ema(close, ema50_period)
+
+// Calculate ATR
+atr = ta.atr(atr_period)
+
+// ============================================================================
+// QUANTIFIED TREND CALCULATIONS
+// ============================================================================
+
+// EMA Slopes (normalized by ATR)
+// Using 5-bar lookback for slope calculation
+slope10 = atr > 0 ? ((ema10 - ema10[5]) / 5) / atr * 100 : 0
+slope20 = atr > 0 ? ((ema20 - ema20[5]) / 5) / atr * 100 : 0
+slope50 = atr > 0 ? ((ema50 - ema50[5]) / 5) / atr * 100 : 0
+
+// EMA Separations (percentage distance)
+sep_10_20 = ema20 != 0 ? ((ema10 - ema20) / ema20) * 100 : 0
+sep_20_50 = ema50 != 0 ? ((ema20 - ema50) / ema50) * 100 : 0
+
+// ============================================================================
+// TREND STATE DEFINITIONS
+// ============================================================================
+
+// Define UPTREND
+uptrend = ema10 > ema20 and ema20 > ema50 and
+          sep_10_20 > sep_10_20_threshold and
+          sep_20_50 > sep_20_50_threshold and
+          slope10 > slope10_threshold and
+          slope20 > slope20_threshold and
+          slope50 > slope50_threshold
+
+// Define DOWNTREND
+downtrend = ema10 < ema20 and ema20 < ema50 and
+            sep_10_20 < -sep_10_20_threshold and
+            sep_20_50 < -sep_20_50_threshold and
+            slope10 < -slope10_threshold and
+            slope20 < -slope20_threshold and
+            slope50 < -slope50_threshold
+
+// Define FOG ZONE (choppy/consolidating market)
+fog_zone = math.abs(sep_10_20) < fog_sep_10_20 or math.abs(sep_20_50) < fog_sep_20_50
+
+// Trend state string for display
+trend_state = uptrend ? "UPTREND" :
+              downtrend ? "DOWNTREND" :
+              fog_zone ? "FOG ZONE" :
+              "WEAK/TRANSITION"
+
+// ============================================================================
+// TIME FILTER
+// ============================================================================
+
+// Convert EST to exchange timezone
+// Note: Adjust timezone offset based on your exchange and daylight savings
+est_offset = -5  // EST is UTC-5 (adjust to -4 for EDT)
+current_hour = hour(time, "America/New_York")
+current_minute = minute(time, "America/New_York")
+
+// Check if current time is within trading hours
+start_time_minutes = start_hour * 60 + start_minute
+end_time_minutes = end_hour * 60 + end_minute
+current_time_minutes = current_hour * 60 + current_minute
+
+in_trading_hours = use_time_filter ?
+                   (current_time_minutes >= start_time_minutes and
+                    current_time_minutes <= end_time_minutes) : true
+
+// ============================================================================
+// PERFORMANCE TRACKING VARIABLES
+// ============================================================================
+
+// Declare variables for tracking
+var int total_trades = 0
+var int winning_trades = 0
+var int losing_trades = 0
+var int consecutive_losses = 0
+var int trades_today = 0
+var float total_profit = 0
+var float total_loss = 0
+var bool last_trade_win = false
+var int last_trade_day = 0
+
+// Reset daily counters
+if dayofmonth != last_trade_day
+    trades_today := 0
+    last_trade_day := dayofmonth
+
+// Check if we should stop trading due to risk limits
+can_trade = consecutive_losses < max_consecutive_losses and
+            trades_today < max_trades_per_day and
+            in_trading_hours
+
+// ============================================================================
+// PULLBACK/RALLY DETECTION
+// ============================================================================
+
+// Calculate distance from close to 10 EMA (percentage)
+distance_to_ema10 = ema10 != 0 ? math.abs((close - ema10) / ema10) * 100 : 100
+
+// Detect pullback touch (price approaches within tolerance of 10 EMA)
+pullback_touched = distance_to_ema10 <= pullback_tolerance
+
+// Track pullback state
+var bool in_pullback_long = false
+var bool in_pullback_short = false
+
+// Update pullback tracking
+if uptrend and pullback_touched
+    in_pullback_long := true
+
+if downtrend and pullback_touched
+    in_pullback_short := true
+
+// ============================================================================
+// ENTRY CONDITIONS
+// ============================================================================
+
+// LONG ENTRY CONDITIONS
+// 1. Must be in uptrend
+// 2. Pullback must have touched 10 EMA
+// 3. Current candle closes ABOVE 10 EMA (confirming bounce)
+// 4. Candle must be bullish
+long_condition = uptrend and
+                 in_pullback_long and
+                 close > ema10 and
+                 close > open and
+                 can_trade and
+                 strategy.position_size == 0
+
+// SHORT ENTRY CONDITIONS
+// 1. Must be in downtrend
+// 2. Rally must have touched 10 EMA
+// 3. Current candle closes BELOW 10 EMA (confirming rejection)
+// 4. Candle must be bearish
+short_condition = downtrend and
+                  in_pullback_short and
+                  close < ema10 and
+                  close < open and
+                  can_trade and
+                  strategy.position_size == 0
+
+// Reset pullback flags after entry
+if long_condition
+    in_pullback_long := false
+
+if short_condition
+    in_pullback_short := false
+
+// Reset pullback flags if trend changes
+if not uptrend
+    in_pullback_long := false
+
+if not downtrend
+    in_pullback_short := false
+
+// ============================================================================
+// POSITION TRACKING
+// ============================================================================
+
+// Track entry price and calculate exit levels
+var float entry_price = 0.0
+var float target_price = 0.0
+var float stop_price = 0.0
+
+// Calculate tick value for NQ (1 tick = 0.25 points, value = $5)
+tick_size = syminfo.mintick
+tick_value = tick_size * 5  // For NQ: 0.25 * 5 = 1.25 per tick in points
+
+// Update entry levels on new position
+if long_condition
+    entry_price := close
+    target_price := entry_price + (target_ticks * tick_value)
+    stop_price := entry_price - (stop_ticks * tick_value)
+    total_trades += 1
+    trades_today += 1
+
+if short_condition
+    entry_price := close
+    target_price := entry_price - (target_ticks * tick_value)
+    stop_price := entry_price + (stop_ticks * tick_value)
+    total_trades += 1
+    trades_today += 1
+
+// ============================================================================
+// EXIT CONDITIONS
+// ============================================================================
+
+// LONG EXIT CONDITIONS
+long_exit_ema = strategy.position_size > 0 and close < ema10
+long_exit_target = strategy.position_size > 0 and high >= target_price
+long_exit_stop = strategy.position_size > 0 and low <= stop_price
+
+// SHORT EXIT CONDITIONS
+short_exit_ema = strategy.position_size < 0 and close > ema10
+short_exit_target = strategy.position_size < 0 and low <= target_price
+short_exit_stop = strategy.position_size < 0 and high >= stop_price
+
+// Determine if exit is a win or loss
+exit_is_win = (strategy.position_size > 0 and long_exit_target) or
+              (strategy.position_size < 0 and short_exit_target)
+
+exit_is_loss = (strategy.position_size > 0 and long_exit_stop) or
+               (strategy.position_size < 0 and short_exit_stop)
+
+// Track win/loss before exit
+if exit_is_win
+    winning_trades += 1
+    consecutive_losses := 0
+    last_trade_win := true
+
+if exit_is_loss
+    losing_trades += 1
+    consecutive_losses += 1
+    last_trade_win := false
+
+// ============================================================================
+// STRATEGY EXECUTION
+// ============================================================================
+
+// Enter positions
+if long_condition
+    strategy.entry("Long", strategy.long, comment="LONG ENTRY")
+
+if short_condition
+    strategy.entry("Short", strategy.short, comment="SHORT ENTRY")
+
+// Exit long positions
+if long_exit_ema
+    strategy.close("Long", comment="Exit: Below 10 EMA")
+
+if long_exit_target
+    strategy.close("Long", comment="Exit: Target Hit")
+
+if long_exit_stop
+    strategy.close("Long", comment="Exit: Stop Loss")
+
+// Exit short positions
+if short_exit_ema
+    strategy.close("Short", comment="Exit: Above 10 EMA")
+
+if short_exit_target
+    strategy.close("Short", comment="Exit: Target Hit")
+
+if short_exit_stop
+    strategy.close("Short", comment="Exit: Stop Loss")
+
+// ============================================================================
+// VISUAL ELEMENTS - PLOTS
+// ============================================================================
+
+// Plot EMAs
+plot(ema10, "10 EMA", color=color.new(color.green, 0), linewidth=2)
+plot(ema20, "20 EMA", color=color.new(color.blue, 0), linewidth=2)
+plot(ema50, "50 EMA", color=color.new(color.red, 0), linewidth=2)
+
+// Background color coding
+bgcolor(uptrend ? color.new(color.green, 90) :
+        downtrend ? color.new(color.red, 90) :
+        fog_zone ? color.new(color.gray, 90) :
+        color.new(color.yellow, 95), title="Trend Background")
+
+// Plot entry signals
+plotshape(long_condition, "Long Signal",
+          shape.triangleup, location.belowbar,
+          color.new(color.green, 0), size=size.small,
+          text="LONG")
+
+plotshape(short_condition, "Short Signal",
+          shape.triangledown, location.abovebar,
+          color.new(color.red, 0), size=size.small,
+          text="SHORT")
+
+// Plot position levels (entry, target, stop)
+plot(strategy.position_size != 0 ? entry_price : na,
+     "Entry Price", color=color.new(color.yellow, 0),
+     style=plot.style_linebr, linewidth=2)
+
+plot(strategy.position_size != 0 ? target_price : na,
+     "Target", color=color.new(color.green, 0),
+     style=plot.style_linebr, linewidth=2)
+
+plot(strategy.position_size != 0 ? stop_price : na,
+     "Stop Loss", color=color.new(color.red, 0),
+     style=plot.style_linebr, linewidth=2)
+
+// ============================================================================
+// PERFORMANCE METRICS CALCULATIONS
+// ============================================================================
+
+// Calculate win rate
+win_rate = total_trades > 0 ? (winning_trades / total_trades) * 100 : 0
+
+// Calculate profit factor
+profit_factor = total_loss != 0 ? math.abs(total_profit / total_loss) : 0
+
+// ============================================================================
+// INFO TABLE
+// ============================================================================
+
+// Create table in top-right corner
+var table info_table = table.new(position.top_right, 2, 8,
+                                  border_width=1,
+                                  border_color=color.gray,
+                                  frame_width=1,
+                                  frame_color=color.gray)
+
+// Update table (only on last bar to avoid performance issues)
+if barstate.islast
+    // Header
+    table.cell(info_table, 0, 0, "Metric",
+               bgcolor=color.new(color.gray, 70),
+               text_color=color.white,
+               text_size=size.small)
+    table.cell(info_table, 1, 0, "Value",
+               bgcolor=color.new(color.gray, 70),
+               text_color=color.white,
+               text_size=size.small)
+
+    // Trend State
+    trend_color = uptrend ? color.new(color.green, 70) :
+                  downtrend ? color.new(color.red, 70) :
+                  fog_zone ? color.new(color.gray, 70) :
+                  color.new(color.yellow, 70)
+    table.cell(info_table, 0, 1, "Trend State", text_size=size.small)
+    table.cell(info_table, 1, 1, trend_state,
+               bgcolor=trend_color, text_size=size.small)
+
+    // EMA10 Slope
+    table.cell(info_table, 0, 2, "EMA10 Slope", text_size=size.small)
+    table.cell(info_table, 1, 2, str.tostring(slope10, "#.##"),
+               text_size=size.small)
+
+    // 10-20 Separation
+    table.cell(info_table, 0, 3, "10-20 Sep %", text_size=size.small)
+    table.cell(info_table, 1, 3, str.tostring(sep_10_20, "#.###") + "%",
+               text_size=size.small)
+
+    // 20-50 Separation
+    table.cell(info_table, 0, 4, "20-50 Sep %", text_size=size.small)
+    table.cell(info_table, 1, 4, str.tostring(sep_20_50, "#.###") + "%",
+               text_size=size.small)
+
+    // Win Rate
+    table.cell(info_table, 0, 5, "Win Rate", text_size=size.small)
+    table.cell(info_table, 1, 5, str.tostring(win_rate, "#.#") + "%",
+               text_size=size.small)
+
+    // Profit Factor
+    table.cell(info_table, 0, 6, "Profit Factor", text_size=size.small)
+    table.cell(info_table, 1, 6, str.tostring(strategy.grossprofit / math.max(strategy.grossloss, 1), "#.##"),
+               text_size=size.small)
+
+    // Trades Today
+    table.cell(info_table, 0, 7, "Trades Today", text_size=size.small)
+    table.cell(info_table, 1, 7, str.tostring(trades_today),
+               text_size=size.small)
+
+// ============================================================================
+// ALERT CONDITIONS
+// ============================================================================
+
+// Alert when long entry signal
+alertcondition(long_condition,
+               title="Long Entry Signal",
+               message="NQ Scalp: LONG entry signal - Price bounced from 10 EMA in uptrend")
+
+// Alert when short entry signal
+alertcondition(short_condition,
+               title="Short Entry Signal",
+               message="NQ Scalp: SHORT entry signal - Price rejected from 10 EMA in downtrend")
+
+// Alert when position exits
+alertcondition(long_exit_ema or long_exit_target or long_exit_stop or
+               short_exit_ema or short_exit_target or short_exit_stop,
+               title="Position Exit",
+               message="NQ Scalp: Position closed")
+
+// Alert when daily trade limit reached
+alertcondition(trades_today >= max_trades_per_day,
+               title="Daily Limit Reached",
+               message="NQ Scalp: Maximum trades per day reached - No more trades today")
+
+// Alert when consecutive loss limit reached
+alertcondition(consecutive_losses >= max_consecutive_losses,
+               title="Consecutive Loss Limit",
+               message="NQ Scalp: Maximum consecutive losses reached - Trading stopped")
+
+// ============================================================================
+// END OF STRATEGY
+// ============================================================================
