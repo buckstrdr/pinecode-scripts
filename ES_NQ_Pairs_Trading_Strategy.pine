@@ -1,0 +1,380 @@
+//@version=6
+// ============================================================================
+// ES/NQ Pairs Trading Strategy
+// ============================================================================
+// This strategy implements a statistical arbitrage approach to trade the
+// spread between ES (S&P 500 E-mini) and NQ (Nasdaq 100 E-mini) futures.
+//
+// Strategy Logic:
+// 1. Calculate normalized spread between ES and NQ prices
+// 2. Compute z-score of the spread to identify deviations from mean
+// 3. Enter LONG SPREAD (Long ES, Short NQ) when spread is oversold (z-score < -threshold)
+// 4. Enter SHORT SPREAD (Short ES, Long NQ) when spread is overbought (z-score > +threshold)
+// 5. Exit when spread reverts to mean or hits stop loss
+//
+// Trading Pair Interpretation:
+// - Long Spread = ES outperforms NQ (buy ES, sell NQ)
+// - Short Spread = NQ outperforms ES (sell ES, buy NQ)
+//
+// © 2025 BucksTRDR
+// For educational and research purposes only
+// ============================================================================
+
+strategy(
+    title="ES/NQ Pairs Trading Strategy",
+    shorttitle="ES/NQ Pairs",
+    overlay=false,
+    initial_capital=100000,
+    default_qty_type=strategy.cash,
+    default_qty_value=10000,
+    commission_type=strategy.commission.cash_per_contract,
+    commission_value=4.24,  // Round-trip commission per contract (~$2.12 per side for futures)
+    slippage=2,             // Slippage in ticks
+    calc_on_every_tick=false,
+    calc_on_order_fills=false,
+    process_orders_on_close=true
+)
+
+// ============================================================================
+// INPUT PARAMETERS
+// ============================================================================
+
+// Spread Calculation Settings
+lookbackPeriod = input.int(100, "Lookback Period (Mean/StdDev)", minval=20, maxval=500,
+    tooltip="Number of bars used to calculate spread mean and standard deviation")
+
+normalizationMethod = input.string("Ratio", "Normalization Method",
+    options=["Ratio", "Z-Score Individual", "Price Difference"],
+    tooltip="Ratio: ES - (NQ * ratio), Z-Score: Normalize each individually, Price Diff: Direct subtraction")
+
+// Entry/Exit Thresholds (in standard deviations)
+entryThreshold = input.float(2.0, "Entry Threshold (Std Dev)", minval=0.5, maxval=5.0, step=0.1,
+    tooltip="Z-score threshold to enter trades (e.g., 2.0 = enter when spread is 2 std devs from mean)")
+
+exitThreshold = input.float(0.5, "Exit Threshold (Std Dev)", minval=0.0, maxval=3.0, step=0.1,
+    tooltip="Z-score threshold to exit trades (e.g., 0.5 = exit when spread returns within 0.5 std devs of mean)")
+
+stopLossThreshold = input.float(4.0, "Stop Loss Threshold (Std Dev)", minval=2.0, maxval=10.0, step=0.1,
+    tooltip="Z-score threshold for stop loss (e.g., 4.0 = stop if spread moves 4 std devs against position)")
+
+// Risk Management
+enableStopLoss = input.bool(true, "Enable Stop Loss", tooltip="Enable stop loss based on z-score threshold")
+enableTimeBasedExit = input.bool(false, "Enable Time-Based Exit", tooltip="Exit trades after specified bars")
+maxBarsInTrade = input.int(50, "Max Bars in Trade", minval=5, maxval=500,
+    tooltip="Maximum bars to hold a position (if time-based exit enabled)")
+
+// Visualization Settings
+showSpreadLine = input.bool(true, "Show Spread Z-Score", group="Visualization")
+showBands = input.bool(true, "Show Entry/Exit Bands", group="Visualization")
+showBackground = input.bool(true, "Show Trade Background", group="Visualization")
+showLabels = input.bool(true, "Show Entry/Exit Labels", group="Visualization")
+
+// ============================================================================
+// DATA ACQUISITION
+// ============================================================================
+
+// Fetch ES1! (S&P 500 E-mini continuous contract) data
+esPrice = request.security("ES1!", timeframe.period, close, gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+
+// Fetch NQ1! (Nasdaq 100 E-mini continuous contract) data
+nqPrice = request.security("NQ1!", timeframe.period, close, gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+
+// Validate data availability
+dataAvailable = not na(esPrice) and not na(nqPrice) and esPrice > 0 and nqPrice > 0
+
+// ============================================================================
+// SPREAD CALCULATION
+// ============================================================================
+
+// Calculate the spread based on selected normalization method
+var float spread = na
+
+if normalizationMethod == "Ratio"
+    // Calculate the ratio to normalize NQ to ES scale
+    // This makes the spread more stable by accounting for different price levels
+    avgES = ta.sma(esPrice, lookbackPeriod)
+    avgNQ = ta.sma(nqPrice, lookbackPeriod)
+    ratio = avgES / avgNQ
+    // Spread = ES - (NQ * ratio)
+    spread := esPrice - (nqPrice * ratio)
+
+else if normalizationMethod == "Z-Score Individual"
+    // Normalize each instrument individually, then take difference
+    esMean = ta.sma(esPrice, lookbackPeriod)
+    esStd = ta.stdev(esPrice, lookbackPeriod)
+    nqMean = ta.sma(nqPrice, lookbackPeriod)
+    nqStd = ta.stdev(nqPrice, lookbackPeriod)
+
+    esNorm = (esPrice - esMean) / esStd
+    nqNorm = (nqPrice - nqMean) / nqStd
+    spread := esNorm - nqNorm
+
+else  // Price Difference
+    // Simple price difference (not recommended due to scale differences)
+    spread := esPrice - nqPrice
+
+// ============================================================================
+// STATISTICAL CALCULATIONS
+// ============================================================================
+
+// Calculate rolling mean and standard deviation of the spread
+spreadMean = ta.sma(spread, lookbackPeriod)
+spreadStd = ta.stdev(spread, lookbackPeriod)
+
+// Calculate Z-Score of the spread
+// Z-Score = (Current Spread - Mean) / Standard Deviation
+zScore = (spread - spreadMean) / spreadStd
+
+// Calculate bands based on standard deviation thresholds
+upperEntryBand = entryThreshold
+lowerEntryBand = -entryThreshold
+upperExitBand = exitThreshold
+lowerExitBand = -exitThreshold
+upperStopBand = stopLossThreshold
+lowerStopBand = -stopLossThreshold
+
+// ============================================================================
+// ENTRY/EXIT SIGNAL LOGIC
+// ============================================================================
+
+// Track bars in current trade for time-based exit
+var int barsInTrade = 0
+
+// Entry Signals
+// Long Spread: Enter when z-score crosses below lower entry band (spread is oversold)
+// This means ES is relatively cheap compared to NQ - expect convergence
+longSpreadEntry = ta.crossunder(zScore, lowerEntryBand) and dataAvailable
+
+// Short Spread: Enter when z-score crosses above upper entry band (spread is overbought)
+// This means ES is relatively expensive compared to NQ - expect convergence
+shortSpreadEntry = ta.crossover(zScore, upperEntryBand) and dataAvailable
+
+// Exit Signals for Long Spread Position
+// Exit when spread reverts toward mean OR hits stop loss
+longSpreadExit = (zScore >= lowerExitBand) or
+                 (enableStopLoss and zScore <= lowerStopBand) or
+                 (enableTimeBasedExit and barsInTrade >= maxBarsInTrade)
+
+// Exit Signals for Short Spread Position
+// Exit when spread reverts toward mean OR hits stop loss
+shortSpreadExit = (zScore <= upperExitBand) or
+                  (enableStopLoss and zScore >= upperStopBand) or
+                  (enableTimeBasedExit and barsInTrade >= maxBarsInTrade)
+
+// Determine exit reasons for labels
+var string exitReason = ""
+if strategy.position_size > 0 and longSpreadExit
+    if zScore <= lowerStopBand and enableStopLoss
+        exitReason := "Stop Loss"
+    else if enableTimeBasedExit and barsInTrade >= maxBarsInTrade
+        exitReason := "Time Exit"
+    else
+        exitReason := "Mean Reversion"
+
+if strategy.position_size < 0 and shortSpreadExit
+    if zScore >= upperStopBand and enableStopLoss
+        exitReason := "Stop Loss"
+    else if enableTimeBasedExit and barsInTrade >= maxBarsInTrade
+        exitReason := "Time Exit"
+    else
+        exitReason := "Mean Reversion"
+
+// ============================================================================
+// STRATEGY EXECUTION
+// ============================================================================
+
+// Execute Long Spread trades (Long ES, Short NQ conceptually)
+// In practice, we trade the spread as a single synthetic instrument
+if longSpreadEntry
+    strategy.entry("Long Spread", strategy.long,
+        comment="Long Spread\nZ: " + str.tostring(zScore, "#.##"))
+    barsInTrade := 0
+
+if strategy.position_size > 0 and longSpreadExit
+    strategy.close("Long Spread",
+        comment="Exit Long\n" + exitReason + "\nZ: " + str.tostring(zScore, "#.##"))
+
+// Execute Short Spread trades (Short ES, Long NQ conceptually)
+if shortSpreadEntry
+    strategy.entry("Short Spread", strategy.short,
+        comment="Short Spread\nZ: " + str.tostring(zScore, "#.##"))
+    barsInTrade := 0
+
+if strategy.position_size < 0 and shortSpreadExit
+    strategy.close("Short Spread",
+        comment="Exit Short\n" + exitReason + "\nZ: " + str.tostring(zScore, "#.##"))
+
+// Increment bars in trade counter
+if strategy.position_size != 0
+    barsInTrade += 1
+else
+    barsInTrade := 0
+
+// ============================================================================
+// VISUALIZATION
+// ============================================================================
+
+// Plot the Z-Score (main indicator)
+plot(showSpreadLine ? zScore : na,
+    title="Spread Z-Score",
+    color=color.new(color.blue, 0),
+    linewidth=2)
+
+// Plot zero line (mean)
+hline(0, "Mean", color=color.gray, linestyle=hline.style_solid, linewidth=1)
+
+// Plot Entry Bands
+plot(showBands ? upperEntryBand : na,
+    title="Upper Entry Band",
+    color=color.new(color.red, 50),
+    linewidth=1,
+    style=plot.style_line)
+
+plot(showBands ? lowerEntryBand : na,
+    title="Lower Entry Band",
+    color=color.new(color.green, 50),
+    linewidth=1,
+    style=plot.style_line)
+
+// Plot Exit Bands
+plot(showBands ? upperExitBand : na,
+    title="Upper Exit Band",
+    color=color.new(color.orange, 70),
+    linewidth=1,
+    style=plot.style_circles)
+
+plot(showBands ? lowerExitBand : na,
+    title="Lower Exit Band",
+    color=color.new(color.lime, 70),
+    linewidth=1,
+    style=plot.style_circles)
+
+// Plot Stop Loss Bands
+plot(showBands and enableStopLoss ? upperStopBand : na,
+    title="Upper Stop Band",
+    color=color.new(color.maroon, 30),
+    linewidth=1,
+    style=plot.style_cross)
+
+plot(showBands and enableStopLoss ? lowerStopBand : na,
+    title="Lower Stop Band",
+    color=color.new(color.navy, 30),
+    linewidth=1,
+    style=plot.style_cross)
+
+// Background coloring based on position
+bgcolor(showBackground and strategy.position_size > 0 ? color.new(color.green, 90) : na,
+    title="Long Spread Background")
+bgcolor(showBackground and strategy.position_size < 0 ? color.new(color.red, 90) : na,
+    title="Short Spread Background")
+
+// Plot entry/exit markers
+plotshape(showLabels and longSpreadEntry,
+    title="Long Spread Entry",
+    style=shape.labelup,
+    location=location.bottom,
+    color=color.new(color.green, 0),
+    text="LONG\nSPREAD",
+    textcolor=color.white,
+    size=size.small)
+
+plotshape(showLabels and shortSpreadEntry,
+    title="Short Spread Entry",
+    style=shape.labeldown,
+    location=location.top,
+    color=color.new(color.red, 0),
+    text="SHORT\nSPREAD",
+    textcolor=color.white,
+    size=size.small)
+
+plotshape(showLabels and strategy.position_size[1] > 0 and longSpreadExit,
+    title="Long Spread Exit",
+    style=shape.xcross,
+    location=location.top,
+    color=color.new(color.orange, 0),
+    size=size.small)
+
+plotshape(showLabels and strategy.position_size[1] < 0 and shortSpreadExit,
+    title="Short Spread Exit",
+    style=shape.xcross,
+    location=location.bottom,
+    color=color.new(color.orange, 0),
+    size=size.small)
+
+// ============================================================================
+// INFORMATION TABLE (Optional - shows current statistics)
+// ============================================================================
+
+// Create table to display current spread statistics
+var table statsTable = table.new(position.top_right, 2, 6,
+    border_width=1,
+    border_color=color.gray,
+    frame_width=1,
+    frame_color=color.gray)
+
+if barstate.islast
+    // Header
+    table.cell(statsTable, 0, 0, "Metric",
+        bgcolor=color.new(color.gray, 70),
+        text_color=color.white,
+        text_size=size.small)
+    table.cell(statsTable, 1, 0, "Value",
+        bgcolor=color.new(color.gray, 70),
+        text_color=color.white,
+        text_size=size.small)
+
+    // Current values
+    table.cell(statsTable, 0, 1, "ES Price", text_size=size.small)
+    table.cell(statsTable, 1, 1, str.tostring(esPrice, "#.##"), text_size=size.small)
+
+    table.cell(statsTable, 0, 2, "NQ Price", text_size=size.small)
+    table.cell(statsTable, 1, 2, str.tostring(nqPrice, "#.##"), text_size=size.small)
+
+    table.cell(statsTable, 0, 3, "Spread Z-Score", text_size=size.small)
+    table.cell(statsTable, 1, 3, str.tostring(zScore, "#.###"),
+        text_color=zScore > entryThreshold ? color.red :
+                   zScore < -entryThreshold ? color.green : color.white,
+        text_size=size.small)
+
+    table.cell(statsTable, 0, 4, "Position", text_size=size.small)
+    table.cell(statsTable, 1, 4,
+        strategy.position_size > 0 ? "LONG SPREAD" :
+        strategy.position_size < 0 ? "SHORT SPREAD" : "FLAT",
+        text_color=strategy.position_size > 0 ? color.green :
+                   strategy.position_size < 0 ? color.red : color.gray,
+        text_size=size.small)
+
+    table.cell(statsTable, 0, 5, "Bars in Trade", text_size=size.small)
+    table.cell(statsTable, 1, 5, str.tostring(barsInTrade), text_size=size.small)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+// Alert conditions for automated trading
+alertcondition(longSpreadEntry,
+    title="Long Spread Entry",
+    message="ES/NQ: Long Spread Entry Signal (Z-Score: {{plot_0}})")
+
+alertcondition(shortSpreadEntry,
+    title="Short Spread Entry",
+    message="ES/NQ: Short Spread Entry Signal (Z-Score: {{plot_0}})")
+
+alertcondition(longSpreadExit,
+    title="Long Spread Exit",
+    message="ES/NQ: Exit Long Spread (Z-Score: {{plot_0}})")
+
+alertcondition(shortSpreadExit,
+    title="Short Spread Exit",
+    message="ES/NQ: Exit Short Spread (Z-Score: {{plot_0}})")
+
+// ============================================================================
+// DISCLAIMER
+// ============================================================================
+// This strategy is provided for educational purposes only.
+// Past performance does not guarantee future results.
+// Trading futures involves substantial risk of loss.
+// Always perform your own analysis and risk assessment.
+//
+// © 2025 BucksTRDR - All Rights Reserved
+// ============================================================================
