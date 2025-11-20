@@ -2,23 +2,50 @@
 // DISCLAIMER: This strategy is provided "as is" for educational purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
 strategy('ORB Multi-Session Strategy by BucksTRDR', overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, pyramiding=0, calc_on_every_tick=false, calc_on_order_fills=false)
 
-// === Strategy Settings ===
-stopLossMultiplier = input.float(1.0, title='Stop Loss Multiplier', minval=0.1, step=0.1, tooltip='Stop loss as multiple of OR range (e.g., 1.0 = 1x range)')
-maxTradesPerSession = input.int(1, title='Max Trades Per Session', minval=1, maxval=10, tooltip='Maximum number of trades allowed per session')
-maxLossesPerSession = input.int(1, title='Max Losses Per Session', minval=1, maxval=5, tooltip='Stop trading after this many losing trades per session')
-
 // === ORB Settings ===
 orbTotalTime = input.int(5, title='ORB total time (minutes)')
 
-// === Volume Confirmation ===
-volumeMALength = input.int(20, title='Volume MA Length', minval=1)
-volumeMultiplier = input.float(1.5, title='Volume Multiplier', minval=0.1, step=0.1)
-breakoutPercent = input.float(25.0, title='Minimum Breakout %', minval=1.0, step=1.0)
+// === SESSION 1 SETTINGS ===
+sess1StopLossMult = input.float(1.0, title='S1: Stop Loss Multiplier', minval=0.1, step=0.1, group='Session 1', tooltip='Stop loss as multiple of OR range')
+sess1MaxTrades = input.int(1, title='S1: Max Trades', minval=1, maxval=10, group='Session 1')
+sess1MaxLosses = input.int(1, title='S1: Max Losses', minval=1, maxval=5, group='Session 1')
+sess1VolMA = input.int(20, title='S1: Volume MA Length', minval=1, group='Session 1')
+sess1VolMult = input.float(1.5, title='S1: Volume Multiplier', minval=0.1, step=0.1, group='Session 1')
+sess1BreakoutPct = input.float(25.0, title='S1: Min Breakout %', minval=1.0, step=1.0, group='Session 1')
+sess1EnableRB = input.bool(true, title='S1: Enable Rubber Band', group='Session 1')
+sess1RBVolMult = input.float(1.2, title='S1: RB Volume Mult', minval=0.1, step=0.1, group='Session 1')
+sess1RBRevPct = input.float(50.0, title='S1: RB Reversal %', minval=10.0, step=5.0, group='Session 1')
+sess1TP1 = input.float(1.0, title='S1: TP1 Multiplier', minval=0.1, step=0.1, group='Session 1')
+sess1TP2 = input.float(2.0, title='S1: TP2 Multiplier', minval=0.1, step=0.1, group='Session 1')
+sess1TP3 = input.float(3.0, title='S1: TP3 Multiplier', minval=0.1, step=0.1, group='Session 1')
 
-// === Rubber Band Settings ===
-enableRubberBand = input.bool(true, title='Enable Rubber Band Signals')
-rbVolumeMultiplier = input.float(1.2, title='Rubber Band Volume Multiplier', minval=0.1, step=0.1)
-rbReversalPercent = input.float(50.0, title='Rubber Band Reversal %', minval=10.0, step=5.0)
+// === SESSION 2 SETTINGS ===
+sess2StopLossMult = input.float(1.0, title='S2: Stop Loss Multiplier', minval=0.1, step=0.1, group='Session 2', tooltip='Stop loss as multiple of OR range')
+sess2MaxTrades = input.int(1, title='S2: Max Trades', minval=1, maxval=10, group='Session 2')
+sess2MaxLosses = input.int(1, title='S2: Max Losses', minval=1, maxval=5, group='Session 2')
+sess2VolMA = input.int(20, title='S2: Volume MA Length', minval=1, group='Session 2')
+sess2VolMult = input.float(1.5, title='S2: Volume Multiplier', minval=0.1, step=0.1, group='Session 2')
+sess2BreakoutPct = input.float(25.0, title='S2: Min Breakout %', minval=1.0, step=1.0, group='Session 2')
+sess2EnableRB = input.bool(true, title='S2: Enable Rubber Band', group='Session 2')
+sess2RBVolMult = input.float(1.2, title='S2: RB Volume Mult', minval=0.1, step=0.1, group='Session 2')
+sess2RBRevPct = input.float(50.0, title='S2: RB Reversal %', minval=10.0, step=5.0, group='Session 2')
+sess2TP1 = input.float(1.0, title='S2: TP1 Multiplier', minval=0.1, step=0.1, group='Session 2')
+sess2TP2 = input.float(2.0, title='S2: TP2 Multiplier', minval=0.1, step=0.1, group='Session 2')
+sess2TP3 = input.float(3.0, title='S2: TP3 Multiplier', minval=0.1, step=0.1, group='Session 2')
+
+// === SESSION 3 SETTINGS ===
+sess3StopLossMult = input.float(1.0, title='S3: Stop Loss Multiplier', minval=0.1, step=0.1, group='Session 3', tooltip='Stop loss as multiple of OR range')
+sess3MaxTrades = input.int(1, title='S3: Max Trades', minval=1, maxval=10, group='Session 3')
+sess3MaxLosses = input.int(1, title='S3: Max Losses', minval=1, maxval=5, group='Session 3')
+sess3VolMA = input.int(20, title='S3: Volume MA Length', minval=1, group='Session 3')
+sess3VolMult = input.float(1.5, title='S3: Volume Multiplier', minval=0.1, step=0.1, group='Session 3')
+sess3BreakoutPct = input.float(25.0, title='S3: Min Breakout %', minval=1.0, step=1.0, group='Session 3')
+sess3EnableRB = input.bool(true, title='S3: Enable Rubber Band', group='Session 3')
+sess3RBVolMult = input.float(1.2, title='S3: RB Volume Mult', minval=0.1, step=0.1, group='Session 3')
+sess3RBRevPct = input.float(50.0, title='S3: RB Reversal %', minval=10.0, step=5.0, group='Session 3')
+sess3TP1 = input.float(1.0, title='S3: TP1 Multiplier', minval=0.1, step=0.1, group='Session 3')
+sess3TP2 = input.float(2.0, title='S3: TP2 Multiplier', minval=0.1, step=0.1, group='Session 3')
+sess3TP3 = input.float(3.0, title='S3: TP3 Multiplier', minval=0.1, step=0.1, group='Session 3')
 
 // === Timezone Selection ===
 user_timezone = input.string("UTC+1", title="Your Timezone", options=["UTC", "UTC+1", "UTC+2", "UTC+3", "UTC+4", "UTC+5", "UTC+6", "UTC+7", "UTC+8", "UTC+9", "UTC+10", "UTC+11", "UTC+12", "UTC-1", "UTC-2", "UTC-3", "UTC-4", "UTC-5", "UTC-6", "UTC-7", "UTC-8", "UTC-9", "UTC-10", "UTC-11", "UTC-12"])
@@ -35,11 +62,6 @@ sess2Label = input.string('New York OR', title='Session 2 Label')
 sess3Enable = input.bool(true, title='Enable Session 3')
 sess3 = input.session('0100-0105', title='Session 3 Time (Your Local Time)')
 sess3Label = input.string('Asia OR', title='Session 3 Label')
-
-// === Take Profit Multipliers ===
-tp1Multiplier = input.float(1.0, title='TP1 Multiplier', minval=0.1, step=0.1)
-tp2Multiplier = input.float(2.0, title='TP2 Multiplier', minval=0.1, step=0.1)
-tp3Multiplier = input.float(3.0, title='TP3 Multiplier', minval=0.1, step=0.1)
 
 // === Session Timing Logic ===
 time1 = sess1Enable ? time(timeframe.period, sess1 + ':1234567', user_timezone) : na
@@ -138,10 +160,10 @@ delta1 = orb_high1 - orb_low1
 delta2 = orb_high2 - orb_low2
 delta3 = orb_high3 - orb_low3
 
-// === Volume Calculations ===
-volumeMA = ta.sma(volume, volumeMALength)
-volumeCondition = volume >= volumeMultiplier * volumeMA
-breakoutThreshold = breakoutPercent / 100.0
+// === Volume Calculations (Per Session) ===
+volumeMA1 = ta.sma(volume, sess1VolMA)
+volumeMA2 = ta.sma(volume, sess2VolMA)
+volumeMA3 = ta.sma(volume, sess3VolMA)
 
 // === Track Closed Trades for Loss Counting ===
 // Check if a new trade closed and if it was a loss
@@ -184,59 +206,89 @@ if is_end3 and show3
 is5min = timeframe.isintraday and timeframe.multiplier == 5
 
 // Session 1 signals
-long1Breakout = (close - orb_high1) >= (breakoutThreshold * delta1)
-short1Breakout = (orb_low1 - close) >= (breakoutThreshold * delta1)
+volumeCondition1 = volume >= sess1VolMult * volumeMA1
+breakoutThreshold1 = sess1BreakoutPct / 100.0
+long1Breakout = (close - orb_high1) >= (breakoutThreshold1 * delta1)
+short1Breakout = (orb_low1 - close) >= (breakoutThreshold1 * delta1)
 long1Basic = is5min and show1 and open < orb_high1 and close > orb_high1
 short1Basic = is5min and show1 and open > orb_low1 and close < orb_low1
-long1 = long1Basic and volumeCondition and long1Breakout and session1TradeCount < maxTradesPerSession and session1LossCount < maxLossesPerSession
-short1 = short1Basic and volumeCondition and short1Breakout and session1TradeCount < maxTradesPerSession and session1LossCount < maxLossesPerSession
+long1 = long1Basic and volumeCondition1 and long1Breakout and session1TradeCount < sess1MaxTrades and session1LossCount < sess1MaxLosses
+short1 = short1Basic and volumeCondition1 and short1Breakout and session1TradeCount < sess1MaxTrades and session1LossCount < sess1MaxLosses
 
 // Session 2 signals
-long2Breakout = (close - orb_high2) >= (breakoutThreshold * delta2)
-short2Breakout = (orb_low2 - close) >= (breakoutThreshold * delta2)
+volumeCondition2 = volume >= sess2VolMult * volumeMA2
+breakoutThreshold2 = sess2BreakoutPct / 100.0
+long2Breakout = (close - orb_high2) >= (breakoutThreshold2 * delta2)
+short2Breakout = (orb_low2 - close) >= (breakoutThreshold2 * delta2)
 long2Basic = is5min and show2 and open < orb_high2 and close > orb_high2
 short2Basic = is5min and show2 and open > orb_low2 and close < orb_low2
-long2 = long2Basic and volumeCondition and long2Breakout and session2TradeCount < maxTradesPerSession and session2LossCount < maxLossesPerSession
-short2 = short2Basic and volumeCondition and short2Breakout and session2TradeCount < maxTradesPerSession and session2LossCount < maxLossesPerSession
+long2 = long2Basic and volumeCondition2 and long2Breakout and session2TradeCount < sess2MaxTrades and session2LossCount < sess2MaxLosses
+short2 = short2Basic and volumeCondition2 and short2Breakout and session2TradeCount < sess2MaxTrades and session2LossCount < sess2MaxLosses
 
 // Session 3 signals
-long3Breakout = (close - orb_high3) >= (breakoutThreshold * delta3)
-short3Breakout = (orb_low3 - close) >= (breakoutThreshold * delta3)
+volumeCondition3 = volume >= sess3VolMult * volumeMA3
+breakoutThreshold3 = sess3BreakoutPct / 100.0
+long3Breakout = (close - orb_high3) >= (breakoutThreshold3 * delta3)
+short3Breakout = (orb_low3 - close) >= (breakoutThreshold3 * delta3)
 long3Basic = is5min and show3 and open < orb_high3 and close > orb_high3
 short3Basic = is5min and show3 and open > orb_low3 and close < orb_low3
-long3 = long3Basic and volumeCondition and long3Breakout and session3TradeCount < maxTradesPerSession and session3LossCount < maxLossesPerSession
-short3 = short3Basic and volumeCondition and short3Breakout and session3TradeCount < maxTradesPerSession and session3LossCount < maxLossesPerSession
+long3 = long3Basic and volumeCondition3 and long3Breakout and session3TradeCount < sess3MaxTrades and session3LossCount < sess3MaxLosses
+short3 = short3Basic and volumeCondition3 and short3Breakout and session3TradeCount < sess3MaxTrades and session3LossCount < sess3MaxLosses
 
 // === Rubber Band Reversal Signals ===
 rubberBandLong = false
 rubberBandShort = false
 
-if enableRubberBand and is5min and volume >= rbVolumeMultiplier * volumeMA
+// Session-specific rubber band logic
+if is5min
     prevOrbLong = long1[1] or long2[1] or long3[1]
     prevOrbShort = short1[1] or short2[1] or short3[1]
 
     if prevOrbLong or prevOrbShort
         prevCandleRange = high[1] - low[1]
-        reversalThreshold = rbReversalPercent / 100.0
 
         if prevCandleRange > 0
-            if prevOrbLong
-                pullbackAmount = high[1] - close
-                if pullbackAmount >= (reversalThreshold * prevCandleRange)
-                    // Check trade count and loss count for current session
-                    canTrade = (show1 and session1TradeCount < maxTradesPerSession and session1LossCount < maxLossesPerSession) or
-                               (show2 and session2TradeCount < maxTradesPerSession and session2LossCount < maxLossesPerSession) or
-                               (show3 and session3TradeCount < maxTradesPerSession and session3LossCount < maxLossesPerSession)
-                    rubberBandShort := canTrade
+            // Session 1 rubber band
+            if show1 and sess1EnableRB and volume >= sess1RBVolMult * volumeMA1
+                reversalThreshold1 = sess1RBRevPct / 100.0
+                if prevOrbLong
+                    pullbackAmount = high[1] - close
+                    if pullbackAmount >= (reversalThreshold1 * prevCandleRange)
+                        if session1TradeCount < sess1MaxTrades and session1LossCount < sess1MaxLosses
+                            rubberBandShort := true
+                if prevOrbShort
+                    bounceAmount = close - low[1]
+                    if bounceAmount >= (reversalThreshold1 * prevCandleRange)
+                        if session1TradeCount < sess1MaxTrades and session1LossCount < sess1MaxLosses
+                            rubberBandLong := true
 
-            if prevOrbShort
-                bounceAmount = close - low[1]
-                if bounceAmount >= (reversalThreshold * prevCandleRange)
-                    // Check trade count and loss count for current session
-                    canTrade = (show1 and session1TradeCount < maxTradesPerSession and session1LossCount < maxLossesPerSession) or
-                               (show2 and session2TradeCount < maxTradesPerSession and session2LossCount < maxLossesPerSession) or
-                               (show3 and session3TradeCount < maxTradesPerSession and session3LossCount < maxLossesPerSession)
-                    rubberBandLong := canTrade
+            // Session 2 rubber band
+            if show2 and sess2EnableRB and volume >= sess2RBVolMult * volumeMA2
+                reversalThreshold2 = sess2RBRevPct / 100.0
+                if prevOrbLong
+                    pullbackAmount = high[1] - close
+                    if pullbackAmount >= (reversalThreshold2 * prevCandleRange)
+                        if session2TradeCount < sess2MaxTrades and session2LossCount < sess2MaxLosses
+                            rubberBandShort := true
+                if prevOrbShort
+                    bounceAmount = close - low[1]
+                    if bounceAmount >= (reversalThreshold2 * prevCandleRange)
+                        if session2TradeCount < sess2MaxTrades and session2LossCount < sess2MaxLosses
+                            rubberBandLong := true
+
+            // Session 3 rubber band
+            if show3 and sess3EnableRB and volume >= sess3RBVolMult * volumeMA3
+                reversalThreshold3 = sess3RBRevPct / 100.0
+                if prevOrbLong
+                    pullbackAmount = high[1] - close
+                    if pullbackAmount >= (reversalThreshold3 * prevCandleRange)
+                        if session3TradeCount < sess3MaxTrades and session3LossCount < sess3MaxLosses
+                            rubberBandShort := true
+                if prevOrbShort
+                    bounceAmount = close - low[1]
+                    if bounceAmount >= (reversalThreshold3 * prevCandleRange)
+                        if session3TradeCount < sess3MaxTrades and session3LossCount < sess3MaxLosses
+                            rubberBandLong := true
 
 // === STRATEGY ENTRIES ===
 
@@ -252,32 +304,32 @@ var string RB_SHORT_ID = "RB_Short"
 
 // Session 1 entries
 if long1
-    stopLoss = orb_low1 - (stopLossMultiplier * delta1)
+    stopLoss = orb_low1 - (sess1StopLossMult * delta1)
     strategy.entry(LONG1_ID, strategy.long, comment="L1")
-    strategy.exit("L1_TP1", from_entry=LONG1_ID, limit=orb_high1 + tp1Multiplier * delta1, stop=stopLoss, qty_percent=33)
-    strategy.exit("L1_TP2", from_entry=LONG1_ID, limit=orb_high1 + tp2Multiplier * delta1, stop=stopLoss, qty_percent=33)
-    strategy.exit("L1_TP3", from_entry=LONG1_ID, limit=orb_high1 + tp3Multiplier * delta1, stop=stopLoss, qty_percent=34)
+    strategy.exit("L1_TP1", from_entry=LONG1_ID, limit=orb_high1 + sess1TP1 * delta1, stop=stopLoss, qty_percent=33)
+    strategy.exit("L1_TP2", from_entry=LONG1_ID, limit=orb_high1 + sess1TP2 * delta1, stop=stopLoss, qty_percent=33)
+    strategy.exit("L1_TP3", from_entry=LONG1_ID, limit=orb_high1 + sess1TP3 * delta1, stop=stopLoss, qty_percent=34)
     session1TradeCount := session1TradeCount + 1
     // Track position details
     entryPrice := close
-    tp2Level := orb_high1 + tp2Multiplier * delta1
-    tp3Level := orb_high1 + tp3Multiplier * delta1
+    tp2Level := orb_high1 + sess1TP2 * delta1
+    tp3Level := orb_high1 + sess1TP3 * delta1
     tp2Reached := false
     currentTradeID := LONG1_ID
     highestHigh := high
     lowestLow := na
 
 if short1
-    stopLoss = orb_high1 + (stopLossMultiplier * delta1)
+    stopLoss = orb_high1 + (sess1StopLossMult * delta1)
     strategy.entry(SHORT1_ID, strategy.short, comment="S1")
-    strategy.exit("S1_TP1", from_entry=SHORT1_ID, limit=orb_low1 - tp1Multiplier * delta1, stop=stopLoss, qty_percent=33)
-    strategy.exit("S1_TP2", from_entry=SHORT1_ID, limit=orb_low1 - tp2Multiplier * delta1, stop=stopLoss, qty_percent=33)
-    strategy.exit("S1_TP3", from_entry=SHORT1_ID, limit=orb_low1 - tp3Multiplier * delta1, stop=stopLoss, qty_percent=34)
+    strategy.exit("S1_TP1", from_entry=SHORT1_ID, limit=orb_low1 - sess1TP1 * delta1, stop=stopLoss, qty_percent=33)
+    strategy.exit("S1_TP2", from_entry=SHORT1_ID, limit=orb_low1 - sess1TP2 * delta1, stop=stopLoss, qty_percent=33)
+    strategy.exit("S1_TP3", from_entry=SHORT1_ID, limit=orb_low1 - sess1TP3 * delta1, stop=stopLoss, qty_percent=34)
     session1TradeCount := session1TradeCount + 1
     // Track position details
     entryPrice := close
-    tp2Level := orb_low1 - tp2Multiplier * delta1
-    tp3Level := orb_low1 - tp3Multiplier * delta1
+    tp2Level := orb_low1 - sess1TP2 * delta1
+    tp3Level := orb_low1 - sess1TP3 * delta1
     tp2Reached := false
     currentTradeID := SHORT1_ID
     highestHigh := na
@@ -285,32 +337,32 @@ if short1
 
 // Session 2 entries
 if long2
-    stopLoss = orb_low2 - (stopLossMultiplier * delta2)
+    stopLoss = orb_low2 - (sess2StopLossMult * delta2)
     strategy.entry(LONG2_ID, strategy.long, comment="L2")
-    strategy.exit("L2_TP1", from_entry=LONG2_ID, limit=orb_high2 + tp1Multiplier * delta2, stop=stopLoss, qty_percent=33)
-    strategy.exit("L2_TP2", from_entry=LONG2_ID, limit=orb_high2 + tp2Multiplier * delta2, stop=stopLoss, qty_percent=33)
-    strategy.exit("L2_TP3", from_entry=LONG2_ID, limit=orb_high2 + tp3Multiplier * delta2, stop=stopLoss, qty_percent=34)
+    strategy.exit("L2_TP1", from_entry=LONG2_ID, limit=orb_high2 + sess2TP1 * delta2, stop=stopLoss, qty_percent=33)
+    strategy.exit("L2_TP2", from_entry=LONG2_ID, limit=orb_high2 + sess2TP2 * delta2, stop=stopLoss, qty_percent=33)
+    strategy.exit("L2_TP3", from_entry=LONG2_ID, limit=orb_high2 + sess2TP3 * delta2, stop=stopLoss, qty_percent=34)
     session2TradeCount := session2TradeCount + 1
     // Track position details
     entryPrice := close
-    tp2Level := orb_high2 + tp2Multiplier * delta2
-    tp3Level := orb_high2 + tp3Multiplier * delta2
+    tp2Level := orb_high2 + sess2TP2 * delta2
+    tp3Level := orb_high2 + sess2TP3 * delta2
     tp2Reached := false
     currentTradeID := LONG2_ID
     highestHigh := high
     lowestLow := na
 
 if short2
-    stopLoss = orb_high2 + (stopLossMultiplier * delta2)
+    stopLoss = orb_high2 + (sess2StopLossMult * delta2)
     strategy.entry(SHORT2_ID, strategy.short, comment="S2")
-    strategy.exit("S2_TP1", from_entry=SHORT2_ID, limit=orb_low2 - tp1Multiplier * delta2, stop=stopLoss, qty_percent=33)
-    strategy.exit("S2_TP2", from_entry=SHORT2_ID, limit=orb_low2 - tp2Multiplier * delta2, stop=stopLoss, qty_percent=33)
-    strategy.exit("S2_TP3", from_entry=SHORT2_ID, limit=orb_low2 - tp3Multiplier * delta2, stop=stopLoss, qty_percent=34)
+    strategy.exit("S2_TP1", from_entry=SHORT2_ID, limit=orb_low2 - sess2TP1 * delta2, stop=stopLoss, qty_percent=33)
+    strategy.exit("S2_TP2", from_entry=SHORT2_ID, limit=orb_low2 - sess2TP2 * delta2, stop=stopLoss, qty_percent=33)
+    strategy.exit("S2_TP3", from_entry=SHORT2_ID, limit=orb_low2 - sess2TP3 * delta2, stop=stopLoss, qty_percent=34)
     session2TradeCount := session2TradeCount + 1
     // Track position details
     entryPrice := close
-    tp2Level := orb_low2 - tp2Multiplier * delta2
-    tp3Level := orb_low2 - tp3Multiplier * delta2
+    tp2Level := orb_low2 - sess2TP2 * delta2
+    tp3Level := orb_low2 - sess2TP3 * delta2
     tp2Reached := false
     currentTradeID := SHORT2_ID
     highestHigh := na
@@ -318,32 +370,32 @@ if short2
 
 // Session 3 entries
 if long3
-    stopLoss = orb_low3 - (stopLossMultiplier * delta3)
+    stopLoss = orb_low3 - (sess3StopLossMult * delta3)
     strategy.entry(LONG3_ID, strategy.long, comment="L3")
-    strategy.exit("L3_TP1", from_entry=LONG3_ID, limit=orb_high3 + tp1Multiplier * delta3, stop=stopLoss, qty_percent=33)
-    strategy.exit("L3_TP2", from_entry=LONG3_ID, limit=orb_high3 + tp2Multiplier * delta3, stop=stopLoss, qty_percent=33)
-    strategy.exit("L3_TP3", from_entry=LONG3_ID, limit=orb_high3 + tp3Multiplier * delta3, stop=stopLoss, qty_percent=34)
+    strategy.exit("L3_TP1", from_entry=LONG3_ID, limit=orb_high3 + sess3TP1 * delta3, stop=stopLoss, qty_percent=33)
+    strategy.exit("L3_TP2", from_entry=LONG3_ID, limit=orb_high3 + sess3TP2 * delta3, stop=stopLoss, qty_percent=33)
+    strategy.exit("L3_TP3", from_entry=LONG3_ID, limit=orb_high3 + sess3TP3 * delta3, stop=stopLoss, qty_percent=34)
     session3TradeCount := session3TradeCount + 1
     // Track position details
     entryPrice := close
-    tp2Level := orb_high3 + tp2Multiplier * delta3
-    tp3Level := orb_high3 + tp3Multiplier * delta3
+    tp2Level := orb_high3 + sess3TP2 * delta3
+    tp3Level := orb_high3 + sess3TP3 * delta3
     tp2Reached := false
     currentTradeID := LONG3_ID
     highestHigh := high
     lowestLow := na
 
 if short3
-    stopLoss = orb_high3 + (stopLossMultiplier * delta3)
+    stopLoss = orb_high3 + (sess3StopLossMult * delta3)
     strategy.entry(SHORT3_ID, strategy.short, comment="S3")
-    strategy.exit("S3_TP1", from_entry=SHORT3_ID, limit=orb_low3 - tp1Multiplier * delta3, stop=stopLoss, qty_percent=33)
-    strategy.exit("S3_TP2", from_entry=SHORT3_ID, limit=orb_low3 - tp2Multiplier * delta3, stop=stopLoss, qty_percent=33)
-    strategy.exit("S3_TP3", from_entry=SHORT3_ID, limit=orb_low3 - tp3Multiplier * delta3, stop=stopLoss, qty_percent=34)
+    strategy.exit("S3_TP1", from_entry=SHORT3_ID, limit=orb_low3 - sess3TP1 * delta3, stop=stopLoss, qty_percent=33)
+    strategy.exit("S3_TP2", from_entry=SHORT3_ID, limit=orb_low3 - sess3TP2 * delta3, stop=stopLoss, qty_percent=33)
+    strategy.exit("S3_TP3", from_entry=SHORT3_ID, limit=orb_low3 - sess3TP3 * delta3, stop=stopLoss, qty_percent=34)
     session3TradeCount := session3TradeCount + 1
     // Track position details
     entryPrice := close
-    tp2Level := orb_low3 - tp2Multiplier * delta3
-    tp3Level := orb_low3 - tp3Multiplier * delta3
+    tp2Level := orb_low3 - sess3TP2 * delta3
+    tp3Level := orb_low3 - sess3TP3 * delta3
     tp2Reached := false
     currentTradeID := SHORT3_ID
     highestHigh := na
@@ -351,17 +403,19 @@ if short3
 
 // Rubber Band entries (Note: RB trades use simpler TP structure, no trailing)
 if rubberBandLong
-    currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
-    stopLoss = low - (stopLossMultiplier * currentDelta)
-    strategy.entry(RB_LONG_ID, strategy.long, comment="RB_L")
-    strategy.exit("RB_L_Exit", from_entry=RB_LONG_ID, limit=high + currentDelta, stop=stopLoss)
-    // Increment appropriate session counter
     if show1
+        stopLoss = low - (sess1StopLossMult * delta1)
         session1TradeCount := session1TradeCount + 1
     else if show2
+        stopLoss = low - (sess2StopLossMult * delta2)
         session2TradeCount := session2TradeCount + 1
     else if show3
+        stopLoss = low - (sess3StopLossMult * delta3)
         session3TradeCount := session3TradeCount + 1
+
+    currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
+    strategy.entry(RB_LONG_ID, strategy.long, comment="RB_L")
+    strategy.exit("RB_L_Exit", from_entry=RB_LONG_ID, limit=high + currentDelta, stop=stopLoss)
     // Reset tracking since RB doesn't use trailing
     entryPrice := na
     tp2Level := na
@@ -369,17 +423,19 @@ if rubberBandLong
     currentTradeID := ""
 
 if rubberBandShort
-    currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
-    stopLoss = high + (stopLossMultiplier * currentDelta)
-    strategy.entry(RB_SHORT_ID, strategy.short, comment="RB_S")
-    strategy.exit("RB_S_Exit", from_entry=RB_SHORT_ID, limit=low - currentDelta, stop=stopLoss)
-    // Increment appropriate session counter
     if show1
+        stopLoss = high + (sess1StopLossMult * delta1)
         session1TradeCount := session1TradeCount + 1
     else if show2
+        stopLoss = high + (sess2StopLossMult * delta2)
         session2TradeCount := session2TradeCount + 1
     else if show3
+        stopLoss = high + (sess3StopLossMult * delta3)
         session3TradeCount := session3TradeCount + 1
+
+    currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
+    strategy.entry(RB_SHORT_ID, strategy.short, comment="RB_S")
+    strategy.exit("RB_S_Exit", from_entry=RB_SHORT_ID, limit=low - currentDelta, stop=stopLoss)
     // Reset tracking since RB doesn't use trailing
     entryPrice := na
     tp2Level := na
@@ -412,16 +468,16 @@ if strategy.position_size != 0 and not na(entryPrice) and not na(tp2Level)
             // Update all remaining exits with trailing stop
             if currentTradeID == LONG1_ID
                 strategy.exit("L1_TP1_Trail", from_entry=LONG1_ID, stop=trailStop, qty_percent=33)
-                strategy.exit("L1_TP2_Trail", from_entry=LONG1_ID, limit=orb_high1 + tp2Multiplier * delta1, stop=trailStop, qty_percent=33)
-                strategy.exit("L1_TP3_Trail", from_entry=LONG1_ID, limit=orb_high1 + tp3Multiplier * delta1, stop=trailStop, qty_percent=34)
+                strategy.exit("L1_TP2_Trail", from_entry=LONG1_ID, limit=orb_high1 + sess1TP2 * delta1, stop=trailStop, qty_percent=33)
+                strategy.exit("L1_TP3_Trail", from_entry=LONG1_ID, limit=orb_high1 + sess1TP3 * delta1, stop=trailStop, qty_percent=34)
             else if currentTradeID == LONG2_ID
                 strategy.exit("L2_TP1_Trail", from_entry=LONG2_ID, stop=trailStop, qty_percent=33)
-                strategy.exit("L2_TP2_Trail", from_entry=LONG2_ID, limit=orb_high2 + tp2Multiplier * delta2, stop=trailStop, qty_percent=33)
-                strategy.exit("L2_TP3_Trail", from_entry=LONG2_ID, limit=orb_high2 + tp3Multiplier * delta2, stop=trailStop, qty_percent=34)
+                strategy.exit("L2_TP2_Trail", from_entry=LONG2_ID, limit=orb_high2 + sess2TP2 * delta2, stop=trailStop, qty_percent=33)
+                strategy.exit("L2_TP3_Trail", from_entry=LONG2_ID, limit=orb_high2 + sess2TP3 * delta2, stop=trailStop, qty_percent=34)
             else if currentTradeID == LONG3_ID
                 strategy.exit("L3_TP1_Trail", from_entry=LONG3_ID, stop=trailStop, qty_percent=33)
-                strategy.exit("L3_TP2_Trail", from_entry=LONG3_ID, limit=orb_high3 + tp2Multiplier * delta3, stop=trailStop, qty_percent=33)
-                strategy.exit("L3_TP3_Trail", from_entry=LONG3_ID, limit=orb_high3 + tp3Multiplier * delta3, stop=trailStop, qty_percent=34)
+                strategy.exit("L3_TP2_Trail", from_entry=LONG3_ID, limit=orb_high3 + sess3TP2 * delta3, stop=trailStop, qty_percent=33)
+                strategy.exit("L3_TP3_Trail", from_entry=LONG3_ID, limit=orb_high3 + sess3TP3 * delta3, stop=trailStop, qty_percent=34)
 
         if isShort
             lowestLow := math.min(lowestLow, low)
@@ -434,16 +490,16 @@ if strategy.position_size != 0 and not na(entryPrice) and not na(tp2Level)
             // Update all remaining exits with trailing stop
             if currentTradeID == SHORT1_ID
                 strategy.exit("S1_TP1_Trail", from_entry=SHORT1_ID, stop=trailStop, qty_percent=33)
-                strategy.exit("S1_TP2_Trail", from_entry=SHORT1_ID, limit=orb_low1 - tp2Multiplier * delta1, stop=trailStop, qty_percent=33)
-                strategy.exit("S1_TP3_Trail", from_entry=SHORT1_ID, limit=orb_low1 - tp3Multiplier * delta1, stop=trailStop, qty_percent=34)
+                strategy.exit("S1_TP2_Trail", from_entry=SHORT1_ID, limit=orb_low1 - sess1TP2 * delta1, stop=trailStop, qty_percent=33)
+                strategy.exit("S1_TP3_Trail", from_entry=SHORT1_ID, limit=orb_low1 - sess1TP3 * delta1, stop=trailStop, qty_percent=34)
             else if currentTradeID == SHORT2_ID
                 strategy.exit("S2_TP1_Trail", from_entry=SHORT2_ID, stop=trailStop, qty_percent=33)
-                strategy.exit("S2_TP2_Trail", from_entry=SHORT2_ID, limit=orb_low2 - tp2Multiplier * delta2, stop=trailStop, qty_percent=33)
-                strategy.exit("S2_TP3_Trail", from_entry=SHORT2_ID, limit=orb_low2 - tp3Multiplier * delta2, stop=trailStop, qty_percent=34)
+                strategy.exit("S2_TP2_Trail", from_entry=SHORT2_ID, limit=orb_low2 - sess2TP2 * delta2, stop=trailStop, qty_percent=33)
+                strategy.exit("S2_TP3_Trail", from_entry=SHORT2_ID, limit=orb_low2 - sess2TP3 * delta2, stop=trailStop, qty_percent=34)
             else if currentTradeID == SHORT3_ID
                 strategy.exit("S3_TP1_Trail", from_entry=SHORT3_ID, stop=trailStop, qty_percent=33)
-                strategy.exit("S3_TP2_Trail", from_entry=SHORT3_ID, limit=orb_low3 - tp2Multiplier * delta3, stop=trailStop, qty_percent=33)
-                strategy.exit("S3_TP3_Trail", from_entry=SHORT3_ID, limit=orb_low3 - tp3Multiplier * delta3, stop=trailStop, qty_percent=34)
+                strategy.exit("S3_TP2_Trail", from_entry=SHORT3_ID, limit=orb_low3 - sess3TP2 * delta3, stop=trailStop, qty_percent=33)
+                strategy.exit("S3_TP3_Trail", from_entry=SHORT3_ID, limit=orb_low3 - sess3TP3 * delta3, stop=trailStop, qty_percent=34)
 
 // Close all positions at session end
 if is_end1 or is_end2 or is_end3
