@@ -21,7 +21,7 @@ minTrailCandleSize = input.float(3.0, title='Min Candle Size for Trailing (point
 tickOffset = input.float(2.0, title='Tick Offset for First SL Move', minval=0, step=0.5, group='Stop Loss Settings', tooltip='Offset in ticks for first stop loss move (to cover fees)')
 
 // === Time Filter Inputs ===
-enableTimeFilter = input.bool(true, title='Enable Time Filter', group='Time Filter', tooltip='Only trade during specific hours')
+enableTimeFilter = input.bool(false, title='Enable Time Filter', group='Time Filter', tooltip='Only trade during specific hours')
 tradingSession = input.session('0930-1600', title='Trading Hours', group='Time Filter', tooltip='Time window for entries (in exchange timezone)')
 closeOutsideHours = input.bool(false, title='Close Positions Outside Hours', group='Time Filter', tooltip='Close any open positions when outside trading hours')
 
