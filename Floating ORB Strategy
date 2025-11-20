@@ -89,7 +89,6 @@ if triggerLong and strategy.position_size == 0
     firstTrailMove := true
     lastCandleClose := close
     strategy.entry('Long', strategy.long, comment='Long Entry')
-    strategy.exit('Long SL', 'Long', stop=low)
 
     if showDebugLabels
         label.new(bar_index, high, '🟢 LONG ENTRY CALLED\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(low, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
@@ -102,11 +101,17 @@ if triggerShort and strategy.position_size == 0
     firstTrailMove := true
     lastCandleClose := close
     strategy.entry('Short', strategy.short, comment='Short Entry')
-    strategy.exit('Short SL', 'Short', stop=high)
 
     if showDebugLabels
         label.new(bar_index, low, '🔴 SHORT ENTRY CALLED\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(high, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
                   style=label.style_label_up, color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.normal)
+
+// === Place Exit Orders Once Position is Open ===
+if strategy.position_size > 0 and tradeDirection == 1
+    strategy.exit('Long SL', 'Long', stop=currentStopLoss)
+
+if strategy.position_size < 0 and tradeDirection == -1
+    strategy.exit('Short SL', 'Short', stop=currentStopLoss)
 
 // === Trailing Stop Logic DISABLED FOR TESTING ===
 // Basic strategy: Entry + Fixed Stop Loss only
