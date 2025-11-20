@@ -18,9 +18,9 @@ showsignals = input.bool(title='Show Buy/Sell Signals?', defval=true, group='Dis
 highlighting = input.bool(title='Highlighter On/Off?', defval=true, group='Display', tooltip='Highlight trend direction with fills')
 
 // === Strategy Settings ===
-useStopLoss = input.bool(title='Use Stop Loss', defval=true, group='Risk Management', tooltip='Enable stop loss based on Supertrend flip')
-useTakeProfit = input.bool(title='Use Take Profit', defval=false, group='Risk Management', tooltip='Enable fixed take profit')
-takeProfitPercent = input.float(title='Take Profit %', defval=2.0, minval=0.1, step=0.1, group='Risk Management', tooltip='Take profit as percentage of entry price')
+useTakeProfit = input.bool(title='Use Take Profit', defval=true, group='Risk Management', tooltip='Enable RR-based take profit')
+riskRewardRatio = input.float(title='Risk:Reward Ratio', defval=2.0, minval=0.5, step=0.5, group='Risk Management', tooltip='Risk-reward ratio for take profit (e.g., 2.0 = 2:1)')
+trailWithSupertrend = input.bool(title='Trail Stop with Supertrend', defval=true, group='Risk Management', tooltip='Use Supertrend line as trailing stop')
 
 // === ATR Calculation ===
 atr2 = ta.sma(ta.tr, Periods)
@@ -43,39 +43,66 @@ trend := trend == -1 and close > dn1 ? 1 : trend == 1 and close < up1 ? -1 : tre
 buySignal = trend == 1 and trend[1] == -1
 sellSignal = trend == -1 and trend[1] == 1
 
+// === Track Entry Price and Initial Stop ===
+var float entryPrice = na
+var float initialStop = na
+var float takeProfit = na
+
 // === Strategy Logic ===
 // Long Entry: When Supertrend flips to bullish
-if buySignal and strategy.position_size <= 0
-    if strategy.position_size < 0
-        strategy.close('Short', comment='Close Short')
+if buySignal and strategy.position_size == 0
+    entryPrice := close
+    initialStop := dn  // Use the Supertrend line as initial stop
 
-    // Calculate take profit if enabled
-    if useTakeProfit
-        tpPrice = close * (1 + takeProfitPercent / 100)
-        strategy.entry('Long', strategy.long, limit=tpPrice, comment='Long Entry')
-    else
-        strategy.entry('Long', strategy.long, comment='Long Entry')
+    // Calculate take profit based on risk-reward ratio
+    stopDistance = entryPrice - initialStop
+    takeProfit := entryPrice + (stopDistance * riskRewardRatio)
+
+    strategy.entry('Long', strategy.long, comment='Long Entry')
+
+    if showsignals
+        debugText = '🟢 LONG\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + '\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
+        label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
 
 // Short Entry: When Supertrend flips to bearish
-if sellSignal and strategy.position_size >= 0
-    if strategy.position_size > 0
-        strategy.close('Long', comment='Close Long')
+if sellSignal and strategy.position_size == 0
+    entryPrice := close
+    initialStop := up  // Use the Supertrend line as initial stop
 
-    // Calculate take profit if enabled
+    // Calculate take profit based on risk-reward ratio
+    stopDistance = initialStop - entryPrice
+    takeProfit := entryPrice - (stopDistance * riskRewardRatio)
+
+    strategy.entry('Short', strategy.short, comment='Short Entry')
+
+    if showsignals
+        debugText = '🔴 SHORT\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + '\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
+        label.new(bar_index, high, debugText, style=label.style_label_down, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
+
+// === Trailing Stop and Take Profit Management ===
+// Long position management
+if strategy.position_size > 0
+    currentStop = trailWithSupertrend ? dn : initialStop  // Trail with Supertrend or use initial
+
     if useTakeProfit
-        tpPrice = close * (1 - takeProfitPercent / 100)
-        strategy.entry('Short', strategy.short, limit=tpPrice, comment='Short Entry')
+        strategy.exit('Long Exit', 'Long', stop=currentStop, limit=takeProfit)
     else
-        strategy.entry('Short', strategy.short, comment='Short Entry')
+        strategy.exit('Long Exit', 'Long', stop=currentStop)
 
-// === Stop Loss Management ===
-// Exit long if Supertrend flips bearish
-if useStopLoss and strategy.position_size > 0 and trend == -1
-    strategy.close('Long', comment='ST Flip')
+// Short position management
+if strategy.position_size < 0
+    currentStop = trailWithSupertrend ? up : initialStop  // Trail with Supertrend or use initial
 
-// Exit short if Supertrend flips bullish
-if useStopLoss and strategy.position_size < 0 and trend == 1
-    strategy.close('Short', comment='ST Flip')
+    if useTakeProfit
+        strategy.exit('Short Exit', 'Short', stop=currentStop, limit=takeProfit)
+    else
+        strategy.exit('Short Exit', 'Short', stop=currentStop)
+
+// Reset on position close
+if strategy.position_size == 0 and strategy.position_size[1] != 0
+    entryPrice := na
+    initialStop := na
+    takeProfit := na
 
 // === Visual Elements ===
 upPlot = plot(trend == 1 ? up : na, title='Up Trend', style=plot.style_linebr, linewidth=2, color=color.green)
@@ -85,6 +112,11 @@ plotshape(buySignal and showsignals ? up : na, title='Buy', text='Buy', location
 dnPlot = plot(trend == 1 ? na : dn, title='Down Trend', style=plot.style_linebr, linewidth=2, color=color.red)
 plotshape(sellSignal ? dn : na, title='DownTrend Begins', location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.red, 0))
 plotshape(sellSignal and showsignals ? dn : na, title='Sell', text='Sell', location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.red, 0), textcolor=color.white)
+
+// Plot stop loss and take profit levels
+plot(strategy.position_size != 0 and not na(takeProfit) ? takeProfit : na, title='Take Profit', color=color.new(color.green, 0), linewidth=1, style=plot.style_circles)
+plot(strategy.position_size > 0 ? dn : na, title='Long Stop (Supertrend)', color=color.new(color.red, 0), linewidth=1, style=plot.style_circles)
+plot(strategy.position_size < 0 ? up : na, title='Short Stop (Supertrend)', color=color.new(color.red, 0), linewidth=1, style=plot.style_circles)
 
 mPlot = plot(ohlc4, title='', style=plot.style_circles, linewidth=0, display=display.none)
 
