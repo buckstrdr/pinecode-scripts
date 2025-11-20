@@ -1,0 +1,155 @@
+//@version=6
+// DISCLAIMER: This indicator is provided "as is" for educational purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
+indicator('Floating ORB Indicator by BucksTRDR', overlay=true)
+
+// === Strategy Inputs (same as strategy) ===
+volumeMALength = input.int(20, title='Volume MA Length', minval=1, group='Volume Settings', tooltip='Length for volume moving average')
+volumeMultiplier = input.float(1.5, title='Volume Multiplier', minval=0.1, step=0.1, group='Volume Settings', tooltip='Minimum volume multiplier vs MA (e.g. 1.5 = 150%)')
+
+minCandleRange = input.float(5.0, title='Min Trigger Candle Range (points)', minval=0.1, step=0.1, group='Candle Filters', tooltip='Minimum size of trigger candle in points')
+maxCandleRange = input.float(50.0, title='Max Trigger Candle Range (points)', minval=0.1, step=1.0, group='Candle Filters', tooltip='Maximum size of trigger candle in points')
+minTrailCandleSize = input.float(3.0, title='Min Candle Size for Trailing (points)', minval=0.1, step=0.1, group='Candle Filters', tooltip='Minimum candle size to move stop loss')
+
+tickOffset = input.float(2.0, title='Tick Offset for First SL Move', minval=0, step=0.5, group='Stop Loss Settings', tooltip='Offset in ticks for first stop loss move (to cover fees)')
+
+// Display options
+showInfoTable = input.bool(true, title='Show Info Table', group='Display', tooltip='Display condition dashboard')
+showTrailingStop = input.bool(true, title='Show Trailing Stop Reference', group='Display', tooltip='Show where trailing stop would be')
+showVolumeBackground = input.bool(true, title='Show Volume Background', group='Display', tooltip='Highlight when volume condition is met')
+
+// === Timeframe Check ===
+is5min = timeframe.isintraday and timeframe.multiplier == 5
+
+// === Volume Calculations ===
+volumeMA = ta.sma(volume, volumeMALength)
+volumeCondition = volume >= volumeMultiplier * volumeMA
+volumePercent = (volume / volumeMA) * 100
+
+// === Candle Calculations ===
+candleRange = high - low
+candleIsBullish = close > open
+candleIsBearish = close < open
+
+// === Trigger Candle Conditions ===
+validCandleRange = candleRange >= minCandleRange and candleRange <= maxCandleRange
+triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange
+triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange
+
+// === Track Virtual Position for Trailing Stop Display ===
+var float virtualEntryPrice = na
+var float virtualStopLoss = na
+var int virtualDirection = 0  // 1 = long, -1 = short, 0 = no position
+var bool firstTrailMove = false
+var float lastCandleClose = na
+
+// Virtual position management (for visualization only)
+if triggerLong and virtualDirection == 0
+    virtualEntryPrice := close
+    virtualStopLoss := low
+    virtualDirection := 1
+    firstTrailMove := true
+    lastCandleClose := close
+
+if triggerShort and virtualDirection == 0
+    virtualEntryPrice := close
+    virtualStopLoss := high
+    virtualDirection := -1
+    firstTrailMove := true
+    lastCandleClose := close
+
+// Virtual trailing stop logic (matches strategy)
+if virtualDirection == 1  // Long position
+    candleContinues = close > lastCandleClose
+    candleMeetsMinSize = candleRange >= minTrailCandleSize
+
+    if candleContinues and candleMeetsMinSize
+        if firstTrailMove
+            virtualStopLoss := lastCandleClose + (tickOffset * syminfo.mintick)
+            firstTrailMove := false
+        else
+            virtualStopLoss := lastCandleClose
+
+    lastCandleClose := close
+
+    // Check if stopped out
+    if low <= virtualStopLoss
+        virtualDirection := 0
+        virtualStopLoss := na
+        virtualEntryPrice := na
+
+if virtualDirection == -1  // Short position
+    candleContinues = close < lastCandleClose
+    candleMeetsMinSize = candleRange >= minTrailCandleSize
+
+    if candleContinues and candleMeetsMinSize
+        if firstTrailMove
+            virtualStopLoss := lastCandleClose - (tickOffset * syminfo.mintick)
+            firstTrailMove := false
+        else
+            virtualStopLoss := lastCandleClose
+
+    lastCandleClose := close
+
+    // Check if stopped out
+    if high >= virtualStopLoss
+        virtualDirection := 0
+        virtualStopLoss := na
+        virtualEntryPrice := na
+
+// === Visual Signals ===
+plotshape(triggerLong, title='Long Trigger', style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.normal)
+plotshape(triggerShort, title='Short Trigger', style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.normal)
+
+// Trailing stop reference line
+plot(showTrailingStop and virtualDirection != 0 ? virtualStopLoss : na, title='Virtual Stop Loss', color=color.red, linewidth=2, style=plot.style_linebr)
+
+// Volume background
+bgcolor(showVolumeBackground and volumeCondition ? color.new(color.blue, 95) : na, title='High Volume Background')
+
+// === Info Table ===
+if showInfoTable and barstate.islast
+    var table infoTable = table.new(position.top_right, 2, 7, border_width=1)
+
+    // Headers
+    table.cell(infoTable, 0, 0, 'Condition', bgcolor=color.new(color.gray, 50), text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 0, 'Status', bgcolor=color.new(color.gray, 50), text_color=color.white, text_size=size.small)
+
+    // Timeframe
+    table.cell(infoTable, 0, 1, 'Timeframe', text_size=size.small)
+    table.cell(infoTable, 1, 1, is5min ? '✓ 5min' : '✗ Not 5min',
+               bgcolor=is5min ? color.new(color.green, 80) : color.new(color.red, 80),
+               text_color=is5min ? color.green : color.red, text_size=size.small)
+
+    // Volume
+    table.cell(infoTable, 0, 2, 'Volume', text_size=size.small)
+    table.cell(infoTable, 1, 2, str.tostring(volumePercent, '#.#') + '% of MA',
+               bgcolor=volumeCondition ? color.new(color.green, 80) : color.new(color.red, 80),
+               text_color=volumeCondition ? color.green : color.red, text_size=size.small)
+
+    // Candle Range
+    table.cell(infoTable, 0, 3, 'Candle Range', text_size=size.small)
+    table.cell(infoTable, 1, 3, str.tostring(candleRange, '#.##') + ' pts',
+               bgcolor=validCandleRange ? color.new(color.green, 80) : color.new(color.red, 80),
+               text_color=validCandleRange ? color.green : color.red, text_size=size.small)
+
+    // Range Limits
+    table.cell(infoTable, 0, 4, 'Range Limits', text_size=size.small)
+    table.cell(infoTable, 1, 4, str.tostring(minCandleRange, '#.#') + ' - ' + str.tostring(maxCandleRange, '#.#'),
+               text_color=color.gray, text_size=size.small)
+
+    // Virtual Position
+    table.cell(infoTable, 0, 5, 'Position', text_size=size.small)
+    posText = virtualDirection == 1 ? 'LONG' : virtualDirection == -1 ? 'SHORT' : 'None'
+    posColor = virtualDirection == 1 ? color.green : virtualDirection == -1 ? color.red : color.gray
+    table.cell(infoTable, 1, 5, posText,
+               bgcolor=color.new(posColor, 80),
+               text_color=posColor, text_size=size.small)
+
+    // Virtual Stop Loss
+    table.cell(infoTable, 0, 6, 'Virtual SL', text_size=size.small)
+    slText = virtualDirection != 0 ? str.tostring(virtualStopLoss, format.mintick) : '-'
+    table.cell(infoTable, 1, 6, slText, text_color=color.red, text_size=size.small)
+
+// === Alert Conditions ===
+alertcondition(triggerLong, title='Long Signal', message='Floating ORB: LONG signal triggered!')
+alertcondition(triggerShort, title='Short Signal', message='Floating ORB: SHORT signal triggered!')
