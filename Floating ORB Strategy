@@ -25,8 +25,9 @@ tpRatio = input.float(4.0, title='Take Profit Ratio', minval=1.0, step=0.5, grou
 scaleOutPercent = input.float(25.0, title='Scale Out % at TP', minval=10, maxval=90, step=5, group='Take Profit', tooltip='Percentage of position to close at take profit')
 
 // === Consecutive Loss Protection ===
-enableLossFilter = input.bool(false, title='Enable Loss Filter', group='Risk Management', tooltip='Stop trading after consecutive losses')
+enableLossFilter = input.bool(false, title='Enable Loss Filter', group='Risk Management', tooltip='Stop trading after consecutive losses (DISABLED by default due to deadlock issue)')
 maxConsecutiveLosses = input.int(3, title='Max Consecutive Losses', minval=1, maxval=10, group='Risk Management', tooltip='Stop trading after this many losses in a row')
+lossFilterCooldownBars = input.int(20, title='Cooldown Bars After Max Losses', minval=1, maxval=200, group='Risk Management', tooltip='Number of bars to wait before resetting after max losses hit')
 
 // === ATR Volatility Filter ===
 enableATRFilter = input.bool(false, title='Enable ATR Filter', group='Volatility Filter', tooltip='Only trade when market has sufficient volatility')
@@ -93,6 +94,7 @@ inDowntrend = close < trendEMA
 // === Consecutive Loss Tracking ===
 var int consecutiveLosses = 0
 var float lastNetProfit = 0.0
+var int barsSinceMaxLosses = 0
 
 // Update consecutive losses after position closes
 if strategy.position_size == 0 and strategy.position_size[1] != 0
@@ -101,6 +103,16 @@ if strategy.position_size == 0 and strategy.position_size[1] != 0
     else
         consecutiveLosses := 0
     lastNetProfit := strategy.netprofit
+
+// Cooldown reset: If we hit max losses, count bars and reset after cooldown
+if enableLossFilter and consecutiveLosses >= maxConsecutiveLosses
+    barsSinceMaxLosses := barsSinceMaxLosses + 1
+    if barsSinceMaxLosses >= lossFilterCooldownBars
+        // Reset after cooldown period
+        consecutiveLosses := 0
+        barsSinceMaxLosses := 0
+else
+    barsSinceMaxLosses := 0
 
 // Check if we're allowed to trade (not over loss limit)
 allowedToTrade = not enableLossFilter or consecutiveLosses < maxConsecutiveLosses

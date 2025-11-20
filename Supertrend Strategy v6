@@ -26,8 +26,9 @@ riskRewardRatio = input.float(title='Risk:Reward Ratio', defval=2.0, minval=0.5,
 lookbackCandles = input.int(title='Stop Loss Lookback Candles', defval=3, minval=1, maxval=10, group='Risk Management', tooltip='Number of previous candles to find highest/lowest for stop loss')
 
 // === Consecutive Loss Filter ===
-enableLossFilter = input.bool(title='Enable Consecutive Loss Filter', defval=true, group='Filters', tooltip='Stop trading after consecutive losses')
+enableLossFilter = input.bool(title='Enable Consecutive Loss Filter', defval=false, group='Filters', tooltip='Stop trading after consecutive losses (DISABLED by default due to issues)')
 maxConsecutiveLosses = input.int(title='Max Consecutive Losses', defval=3, minval=1, maxval=10, group='Filters', tooltip='Stop trading after this many losses in a row')
+lossFilterCooldownBars = input.int(title='Cooldown Bars After Max Losses', defval=20, minval=1, maxval=200, group='Filters', tooltip='Number of bars to wait before resetting after max losses hit')
 
 // === ADX Trend Strength Filter ===
 enableADXFilter = input.bool(title='Enable ADX Trend Filter', defval=true, group='Filters', tooltip='Only trade when trend is strong enough')
@@ -86,6 +87,7 @@ momentumShortOK = not enableMomentumFilter or priceBelowDn >= minMovePercent
 // === Consecutive Loss Tracking ===
 var int consecutiveLosses = 0
 var float lastNetProfit = 0.0
+var int barsSinceMaxLosses = 0
 
 // Update consecutive losses after position closes
 if strategy.position_size == 0 and strategy.position_size[1] != 0
@@ -94,6 +96,16 @@ if strategy.position_size == 0 and strategy.position_size[1] != 0
     else
         consecutiveLosses := 0
     lastNetProfit := strategy.netprofit
+
+// Cooldown reset: If we hit max losses, count bars and reset after cooldown
+if enableLossFilter and consecutiveLosses >= maxConsecutiveLosses
+    barsSinceMaxLosses := barsSinceMaxLosses + 1
+    if barsSinceMaxLosses >= lossFilterCooldownBars
+        // Reset after cooldown period
+        consecutiveLosses := 0
+        barsSinceMaxLosses := 0
+else
+    barsSinceMaxLosses := 0
 
 // Check if we're allowed to trade (not over loss limit)
 allowedToTrade = not enableLossFilter or consecutiveLosses < maxConsecutiveLosses
