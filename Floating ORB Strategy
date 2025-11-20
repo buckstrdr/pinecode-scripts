@@ -2,7 +2,7 @@
 // DISCLAIMER: This strategy is provided "as is" for educational and backtesting purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
 strategy('Floating ORB Strategy by BucksTRDR', overlay=true,
          fill_orders_on_standard_ohlc=true,
-         initial_capital=50000,
+         initial_capital=1000000,
          default_qty_type=strategy.fixed,
          default_qty_value=1,
          commission_type=strategy.commission.percent,
