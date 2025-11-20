@@ -1,0 +1,101 @@
+//@version=6
+// DISCLAIMER: This strategy is provided "as is" for educational and backtesting purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
+strategy('Supertrend Strategy by BucksTRDR', overlay=true,
+         fill_orders_on_standard_ohlc=true,
+         initial_capital=100000,
+         default_qty_type=strategy.percent_of_equity,
+         default_qty_value=100,
+         commission_type=strategy.commission.percent,
+         commission_value=0.1,
+         pyramiding=0)
+
+// === Inputs ===
+Periods = input.int(title='ATR Period', defval=10, minval=1, group='Supertrend Settings', tooltip='Period for ATR calculation')
+src = input(hl2, title='Source', group='Supertrend Settings', tooltip='Price source for calculations')
+Multiplier = input.float(title='ATR Multiplier', step=0.1, defval=3.0, minval=0.1, group='Supertrend Settings', tooltip='Multiplier for ATR bands')
+changeATR = input.bool(title='Change ATR Calculation Method?', defval=true, group='Supertrend Settings', tooltip='Use built-in ATR vs SMA of TR')
+showsignals = input.bool(title='Show Buy/Sell Signals?', defval=true, group='Display', tooltip='Show buy/sell labels on chart')
+highlighting = input.bool(title='Highlighter On/Off?', defval=true, group='Display', tooltip='Highlight trend direction with fills')
+
+// === Strategy Settings ===
+useStopLoss = input.bool(title='Use Stop Loss', defval=true, group='Risk Management', tooltip='Enable stop loss based on Supertrend flip')
+useTakeProfit = input.bool(title='Use Take Profit', defval=false, group='Risk Management', tooltip='Enable fixed take profit')
+takeProfitPercent = input.float(title='Take Profit %', defval=2.0, minval=0.1, step=0.1, group='Risk Management', tooltip='Take profit as percentage of entry price')
+
+// === ATR Calculation ===
+atr2 = ta.sma(ta.tr, Periods)
+atr = changeATR ? ta.atr(Periods) : atr2
+
+// === Supertrend Calculation ===
+up = src - (Multiplier * atr)
+up1 = nz(up[1], up)
+up := close[1] > up1 ? math.max(up, up1) : up
+
+dn = src + (Multiplier * atr)
+dn1 = nz(dn[1], dn)
+dn := close[1] < dn1 ? math.min(dn, dn1) : dn
+
+var int trend = 1
+trend := nz(trend[1], trend)
+trend := trend == -1 and close > dn1 ? 1 : trend == 1 and close < up1 ? -1 : trend
+
+// === Signals ===
+buySignal = trend == 1 and trend[1] == -1
+sellSignal = trend == -1 and trend[1] == 1
+
+// === Strategy Logic ===
+// Long Entry: When Supertrend flips to bullish
+if buySignal and strategy.position_size <= 0
+    if strategy.position_size < 0
+        strategy.close('Short', comment='Close Short')
+
+    // Calculate take profit if enabled
+    if useTakeProfit
+        tpPrice = close * (1 + takeProfitPercent / 100)
+        strategy.entry('Long', strategy.long, limit=tpPrice, comment='Long Entry')
+    else
+        strategy.entry('Long', strategy.long, comment='Long Entry')
+
+// Short Entry: When Supertrend flips to bearish
+if sellSignal and strategy.position_size >= 0
+    if strategy.position_size > 0
+        strategy.close('Long', comment='Close Long')
+
+    // Calculate take profit if enabled
+    if useTakeProfit
+        tpPrice = close * (1 - takeProfitPercent / 100)
+        strategy.entry('Short', strategy.short, limit=tpPrice, comment='Short Entry')
+    else
+        strategy.entry('Short', strategy.short, comment='Short Entry')
+
+// === Stop Loss Management ===
+// Exit long if Supertrend flips bearish
+if useStopLoss and strategy.position_size > 0 and trend == -1
+    strategy.close('Long', comment='ST Flip')
+
+// Exit short if Supertrend flips bullish
+if useStopLoss and strategy.position_size < 0 and trend == 1
+    strategy.close('Short', comment='ST Flip')
+
+// === Visual Elements ===
+upPlot = plot(trend == 1 ? up : na, title='Up Trend', style=plot.style_linebr, linewidth=2, color=color.green)
+plotshape(buySignal ? up : na, title='UpTrend Begins', location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.green, 0))
+plotshape(buySignal and showsignals ? up : na, title='Buy', text='Buy', location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(color.green, 0), textcolor=color.white)
+
+dnPlot = plot(trend == 1 ? na : dn, title='Down Trend', style=plot.style_linebr, linewidth=2, color=color.red)
+plotshape(sellSignal ? dn : na, title='DownTrend Begins', location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.red, 0))
+plotshape(sellSignal and showsignals ? dn : na, title='Sell', text='Sell', location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.red, 0), textcolor=color.white)
+
+mPlot = plot(ohlc4, title='', style=plot.style_circles, linewidth=0, display=display.none)
+
+longFillColor = highlighting ? (trend == 1 ? color.new(color.green, 90) : color.new(color.white, 100)) : color.new(color.white, 100)
+shortFillColor = highlighting ? (trend == -1 ? color.new(color.red, 90) : color.new(color.white, 100)) : color.new(color.white, 100)
+
+fill(mPlot, upPlot, title='UpTrend Highlighter', color=longFillColor)
+fill(mPlot, dnPlot, title='DownTrend Highlighter', color=shortFillColor)
+
+// === Alerts ===
+alertcondition(buySignal, title='SuperTrend Buy', message='SuperTrend Buy!')
+alertcondition(sellSignal, title='SuperTrend Sell', message='SuperTrend Sell!')
+changeCond = trend != trend[1]
+alertcondition(changeCond, title='SuperTrend Direction Change', message='SuperTrend has changed direction!')
