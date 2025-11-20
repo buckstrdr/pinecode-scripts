@@ -518,6 +518,18 @@ if rubberBandShort
                    'Strategy: Counter-trend entry'
     alert(alertMessage, alert.freq_once_per_bar)
 
+// === Alert Conditions for TradingView Alert Dialog ===
+alertcondition(long1, title='Session 1 Long Breakout', message='{{ticker}} - Session 1 LONG breakout signal!')
+alertcondition(short1, title='Session 1 Short Breakout', message='{{ticker}} - Session 1 SHORT breakout signal!')
+alertcondition(long2, title='Session 2 Long Breakout', message='{{ticker}} - Session 2 LONG breakout signal!')
+alertcondition(short2, title='Session 2 Short Breakout', message='{{ticker}} - Session 2 SHORT breakout signal!')
+alertcondition(long3, title='Session 3 Long Breakout', message='{{ticker}} - Session 3 LONG breakout signal!')
+alertcondition(short3, title='Session 3 Short Breakout', message='{{ticker}} - Session 3 SHORT breakout signal!')
+alertcondition(rubberBandLong, title='Rubber Band Long', message='{{ticker}} - RUBBER BAND LONG reversal signal!')
+alertcondition(rubberBandShort, title='Rubber Band Short', message='{{ticker}} - RUBBER BAND SHORT reversal signal!')
+alertcondition(long1 or short1 or long2 or short2 or long3 or short3, title='Any ORB Breakout', message='{{ticker}} - ORB Breakout detected!')
+alertcondition(rubberBandLong or rubberBandShort, title='Any Rubber Band Signal', message='{{ticker}} - Rubber Band reversal detected!')
+
 // === VWAP & EMAs ===
 vwapLine = ta.vwap(close)
 plot(vwapLine, title='VWAP', color=vwapColor, linewidth=5)
