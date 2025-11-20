@@ -127,7 +127,7 @@ var float riskAmount = na
 if buySignal
     entryPrice := close
     // Find the lowest low of previous N candles for stop loss
-    initialStop := ta.lowest(low, lookbackCandles)[1]  // [1] to skip current candle
+    initialStop := ta.lowest(low, lookbackCandles)[1] - feeOffset  // Apply offset to initial stop to cover fees
 
     // Calculate risk and take profit
     riskAmount := entryPrice - initialStop
@@ -143,7 +143,7 @@ if buySignal
 if sellSignal
     entryPrice := close
     // Find the highest high of previous N candles for stop loss
-    initialStop := ta.highest(high, lookbackCandles)[1]  // [1] to skip current candle
+    initialStop := ta.highest(high, lookbackCandles)[1] + feeOffset  // Apply offset to initial stop to cover fees
 
     // Calculate risk and take profit
     riskAmount := initialStop - entryPrice

@@ -182,7 +182,7 @@ var float lowestPrice = na  // Track lowest price for trailing (short)
 // Long entry (2 contracts only, no pyramiding)
 if triggerLong and strategy.position_size == 0
     entryPrice := close
-    currentStopLoss := low
+    currentStopLoss := low - tickOffset  // Apply offset to initial stop to cover fees
     initialCandleSize := candleRange  // Track the entry candle size
     tradeDirection := 1
     tpHit := false
@@ -201,7 +201,7 @@ if triggerLong and strategy.position_size == 0
 // Short entry (2 contracts only, no pyramiding)
 if triggerShort and strategy.position_size == 0
     entryPrice := close
-    currentStopLoss := high
+    currentStopLoss := high + tickOffset  // Apply offset to initial stop to cover fees
     initialCandleSize := candleRange  // Track the entry candle size
     tradeDirection := -1
     tpHit := false
