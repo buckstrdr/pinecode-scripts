@@ -243,7 +243,7 @@ if strategy.position_size > 0 and tradeDirection == 1
         numCandleSizes = math.floor(priceMovement / initialCandleSize)
 
         if numCandleSizes > 0
-            newStopLoss = entryPrice + ((numCandleSizes - 1) * initialCandleSize)  // Trail one candle behind
+            newStopLoss = entryPrice + ((numCandleSizes - 1) * initialCandleSize) + tickOffset  // Add offset to cover fees
             if newStopLoss > currentStopLoss
                 currentStopLoss := newStopLoss
                 if showDebugLabels
@@ -280,7 +280,7 @@ if strategy.position_size < 0 and tradeDirection == -1
         numCandleSizes = math.floor(priceMovement / initialCandleSize)
 
         if numCandleSizes > 0
-            newStopLoss = entryPrice - ((numCandleSizes - 1) * initialCandleSize)  // Trail one candle behind
+            newStopLoss = entryPrice - ((numCandleSizes - 1) * initialCandleSize) - tickOffset  // Subtract offset to cover fees
             if newStopLoss < currentStopLoss
                 currentStopLoss := newStopLoss
                 if showDebugLabels
