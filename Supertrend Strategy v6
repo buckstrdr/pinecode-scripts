@@ -2,6 +2,8 @@
 // DISCLAIMER: This strategy is provided "as is" for educational and backtesting purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
 strategy('Supertrend Strategy by BucksTRDR', overlay=true,
          fill_orders_on_standard_ohlc=true,
+         calc_on_every_tick=true,
+         calc_on_order_fills=true,
          initial_capital=100000,
          default_qty_type=strategy.percent_of_equity,
          default_qty_value=100,
@@ -26,12 +28,12 @@ trailWithSupertrend = input.bool(title='Trail Stop with Supertrend', defval=true
 atr2 = ta.sma(ta.tr, Periods)
 atr = changeATR ? ta.atr(Periods) : atr2
 
-// === Supertrend Calculation ===
-up = src - (Multiplier * atr)
+// === Supertrend Calculation (exact v4 logic) ===
+up = src - Multiplier * atr
 up1 = nz(up[1], up)
 up := close[1] > up1 ? math.max(up, up1) : up
 
-dn = src + (Multiplier * atr)
+dn = src + Multiplier * atr
 dn1 = nz(dn[1], dn)
 dn := close[1] < dn1 ? math.min(dn, dn1) : dn
 
