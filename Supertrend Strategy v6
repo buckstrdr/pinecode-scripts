@@ -18,6 +18,7 @@ Multiplier = input.float(title='ATR Multiplier', step=0.1, defval=3.0, minval=0.
 changeATR = input.bool(title='Change ATR Calculation Method?', defval=true, group='Supertrend Settings', tooltip='Use built-in ATR vs SMA of TR')
 showsignals = input.bool(title='Show Buy/Sell Signals?', defval=true, group='Display', tooltip='Show buy/sell labels on chart')
 highlighting = input.bool(title='Highlighter On/Off?', defval=true, group='Display', tooltip='Highlight trend direction with fills')
+showDetailedLabels = input.bool(title='Show Detailed Entry Labels?', defval=false, group='Display', tooltip='Show detailed entry/SL/TP info labels (can clutter chart)')
 
 // === Strategy Settings ===
 useTakeProfit = input.bool(title='Use Take Profit', defval=true, group='Risk Management', tooltip='Enable RR-based take profit')
@@ -81,9 +82,9 @@ if buySignal
 
     strategy.entry('Long', strategy.long, comment='Long Entry')
 
-    if showsignals
-        debugText = '🟢 LONG\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + ' (' + str.tostring(lookbackCandles) + ' candle low)\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
-        label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
+    if showDetailedLabels
+        debugText = '🟢 LONG\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + '\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
+        label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.green, 0), textcolor=color.white, size=size.tiny)
 
 // Short Entry: When Supertrend flips to bearish
 if sellSignal
@@ -97,9 +98,9 @@ if sellSignal
 
     strategy.entry('Short', strategy.short, comment='Short Entry')
 
-    if showsignals
-        debugText = '🔴 SHORT\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + ' (' + str.tostring(lookbackCandles) + ' candle high)\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
-        label.new(bar_index, high, debugText, style=label.style_label_down, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
+    if showDetailedLabels
+        debugText = '🔴 SHORT\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(initialStop, format.mintick) + '\nTP: ' + str.tostring(takeProfit, format.mintick) + '\nRR: ' + str.tostring(riskRewardRatio, '#.#') + ':1'
+        label.new(bar_index, high, debugText, style=label.style_label_down, color=color.new(color.red, 0), textcolor=color.white, size=size.tiny)
 
 // === RR-Based Trailing Stop Management ===
 // Long position management
@@ -144,12 +145,12 @@ if strategy.position_size < 0
 if isEODCloseTime
     if strategy.position_size > 0
         strategy.close('Long', comment='EOD Close 21:00 UTC')
-        if showsignals
-            label.new(bar_index, high, '🔔 EOD CLOSE\n21:00 UTC', style=label.style_label_down, color=color.new(color.purple, 0), textcolor=color.white, size=size.small)
+        if showDetailedLabels
+            label.new(bar_index, high, 'EOD', style=label.style_label_down, color=color.new(color.purple, 0), textcolor=color.white, size=size.tiny)
     if strategy.position_size < 0
         strategy.close('Short', comment='EOD Close 21:00 UTC')
-        if showsignals
-            label.new(bar_index, low, '🔔 EOD CLOSE\n21:00 UTC', style=label.style_label_up, color=color.new(color.purple, 0), textcolor=color.white, size=size.small)
+        if showDetailedLabels
+            label.new(bar_index, low, 'EOD', style=label.style_label_up, color=color.new(color.purple, 0), textcolor=color.white, size=size.tiny)
 
 // Reset on position close
 if strategy.position_size == 0 and strategy.position_size[1] != 0
