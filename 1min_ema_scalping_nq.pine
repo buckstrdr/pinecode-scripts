@@ -125,8 +125,6 @@ var int winning_trades = 0
 var int losing_trades = 0
 var int consecutive_losses = 0
 var int trades_today = 0
-var float total_profit = 0
-var float total_loss = 0
 var bool last_trade_win = false
 var int last_trade_day = 0
 
@@ -308,11 +306,11 @@ plot(strategy.position_size != 0 ? stop_price : na, "Stop Loss", color=color.new
 // PERFORMANCE METRICS CALCULATIONS
 // ============================================================================
 
-// Calculate win rate
+// Calculate win rate (using custom tracking)
 win_rate = total_trades > 0 ? (winning_trades / total_trades) * 100 : 0
 
-// Calculate profit factor
-profit_factor = total_loss != 0 ? math.abs(total_profit / total_loss) : 0
+// Calculate profit factor (using strategy built-ins)
+profit_factor = strategy.grossloss > 0 ? strategy.grossprofit / strategy.grossloss : 0.0
 
 // ============================================================================
 // INFO TABLE
