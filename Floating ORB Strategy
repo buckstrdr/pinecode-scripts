@@ -3,10 +3,11 @@
 strategy('Floating ORB Strategy by BucksTRDR', overlay=true,
          fill_orders_on_standard_ohlc=true,
          initial_capital=1000000,
-         default_qty_type=strategy.percent_of_equity,
-         default_qty_value=10,
+         default_qty_type=strategy.fixed,
+         default_qty_value=2,
          commission_type=strategy.commission.cash_per_contract,
-         commission_value=2)
+         commission_value=2,
+         pyramiding=3)
 
 // === Strategy Inputs ===
 volumeMALength = input.int(20, title='Volume MA Length', minval=1, group='Volume Settings', tooltip='Length for volume moving average')
@@ -17,6 +18,11 @@ maxCandleRange = input.float(50.0, title='Max Trigger Candle Range (points)', mi
 minTrailCandleSize = input.float(3.0, title='Min Candle Size for Trailing (points)', minval=0.1, step=0.1, group='Candle Filters', tooltip='Minimum candle size to move stop loss')
 
 tickOffset = input.float(2.0, title='Tick Offset for First SL Move', minval=0, step=0.5, group='Stop Loss Settings', tooltip='Offset in ticks for first stop loss move (to cover fees)')
+
+// === Take Profit & Scaling Settings ===
+enableFixedTP = input.bool(true, title='Enable Fixed Take Profit', group='Take Profit', tooltip='Use fixed 3:1 reward-risk take profit')
+tpRatio = input.float(3.0, title='Take Profit Ratio', minval=1.0, step=0.5, group='Take Profit', tooltip='Reward-risk ratio for take profit (e.g., 3.0 = 3:1)')
+scaleOutPercent = input.float(50.0, title='Scale Out % at TP', minval=10, maxval=90, step=10, group='Take Profit', tooltip='Percentage of position to close at take profit')
 
 // === Trend Filter Inputs ===
 enableTrendFilter = input.bool(true, title='Enable Trend Filter', group='Trend Filter', tooltip='Only trade in direction of trend')
@@ -116,93 +122,148 @@ if showFailedConditions and strategy.position_size == 0
 // === Track Position State ===
 var float entryPrice = na
 var float currentStopLoss = na
+var float takeProfitLevel = na
+var float initialCandleSize = na  // Size of the entry trigger candle
 var int tradeDirection = 0  // 1 = long, -1 = short, 0 = no position
-var bool firstTrailMove = false  // Track if we've made the first SL adjustment
-var float lastCandleClose = na  // Track previous candle close for trailing
+var bool tpHit = false  // Whether we've hit TP and scaled out
+var int entryCount = 0  // Number of entries (for pyramiding)
+var float highestPrice = na  // Track highest price for trailing (long)
+var float lowestPrice = na  // Track lowest price for trailing (short)
 
 // === Entry Logic ===
+// Initial long entry
 if triggerLong and strategy.position_size == 0
     entryPrice := close
     currentStopLoss := low
+    initialCandleSize := candleRange  // Track the entry candle size
     tradeDirection := 1
-    firstTrailMove := true
-    lastCandleClose := close
-    strategy.entry('Long', strategy.long)
+    entryCount := 1
+    tpHit := false
+    highestPrice := close
+
+    // Calculate take profit based on stop distance and ratio
+    stopDistance = entryPrice - currentStopLoss
+    takeProfitLevel := entryPrice + (stopDistance * tpRatio)
+
+    strategy.entry('Long', strategy.long, qty=2)
 
     if showDebugLabels
-        label.new(bar_index, high, '🟢 LONG ENTRY\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
+        label.new(bar_index, high, '🟢 LONG ENTRY #' + str.tostring(entryCount) + '\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(currentStopLoss, format.mintick) + '\nTP: ' + str.tostring(takeProfitLevel, format.mintick),
                   style=label.style_label_down, color=color.green, textcolor=color.white, size=size.small)
 
+// Pyramid long entry (add to position)
+if triggerLong and strategy.position_size > 0 and tradeDirection == 1 and entryCount < 3
+    entryCount := entryCount + 1
+    strategy.entry('Long', strategy.long, qty=1)
+
+    if showDebugLabels
+        label.new(bar_index, high, '🟢 ADD LONG #' + str.tostring(entryCount) + '\nPrice: ' + str.tostring(close, format.mintick),
+                  style=label.style_label_down, color=color.new(color.green, 50), textcolor=color.white, size=size.tiny)
+
+// Initial short entry
 if triggerShort and strategy.position_size == 0
     entryPrice := close
     currentStopLoss := high
+    initialCandleSize := candleRange  // Track the entry candle size
     tradeDirection := -1
-    firstTrailMove := true
-    lastCandleClose := close
-    strategy.entry('Short', strategy.short)
+    entryCount := 1
+    tpHit := false
+    lowestPrice := close
+
+    // Calculate take profit based on stop distance and ratio
+    stopDistance = currentStopLoss - entryPrice
+    takeProfitLevel := entryPrice - (stopDistance * tpRatio)
+
+    strategy.entry('Short', strategy.short, qty=2)
 
     if showDebugLabels
-        label.new(bar_index, low, '🔴 SHORT ENTRY\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
+        label.new(bar_index, low, '🔴 SHORT ENTRY #' + str.tostring(entryCount) + '\nEntry: ' + str.tostring(entryPrice, format.mintick) + '\nSL: ' + str.tostring(currentStopLoss, format.mintick) + '\nTP: ' + str.tostring(takeProfitLevel, format.mintick),
                   style=label.style_label_up, color=color.red, textcolor=color.white, size=size.small)
 
-// === Trailing Stop Logic ===
-if strategy.position_size > 0  // Long position
-    // Check if candle continues in our direction and meets minimum size
-    candleContinues = close > lastCandleClose
-    candleMeetsMinSize = candleRange >= minTrailCandleSize
+// Pyramid short entry (add to position)
+if triggerShort and strategy.position_size < 0 and tradeDirection == -1 and entryCount < 3
+    entryCount := entryCount + 1
+    strategy.entry('Short', strategy.short, qty=1)
 
-    if candleContinues and candleMeetsMinSize
-        // Calculate new stop loss
-        if firstTrailMove
-            // First move: add tick offset for fees
-            currentStopLoss := lastCandleClose + (tickOffset * syminfo.mintick)
-            firstTrailMove := false
+    if showDebugLabels
+        label.new(bar_index, low, '🔴 ADD SHORT #' + str.tostring(entryCount) + '\nPrice: ' + str.tostring(close, format.mintick),
+                  style=label.style_label_up, color=color.new(color.red, 50), textcolor=color.white, size=size.tiny)
 
-            if showDebugLabels
-                label.new(bar_index, low, '📈 1st Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick) + '\n(+' + str.tostring(tickOffset) + ' ticks)',
-                          style=label.style_label_up, color=color.blue, textcolor=color.white, size=size.tiny)
-        else
-            // Subsequent moves: just use previous candle close
-            currentStopLoss := lastCandleClose
+// === Take Profit & Trailing Stop Management ===
+// Long position management
+if strategy.position_size > 0 and tradeDirection == 1
+    // Update highest price reached
+    if high > highestPrice
+        highestPrice := high
 
-            if showDebugLabels
-                label.new(bar_index, low, '📈 Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick),
-                          style=label.style_label_up, color=color.aqua, textcolor=color.black, size=size.tiny)
+    // Check if we hit take profit and haven't scaled out yet
+    if enableFixedTP and high >= takeProfitLevel and not tpHit
+        // Scale out at TP
+        scaleOutQty = math.round(math.abs(strategy.position_size) * (scaleOutPercent / 100.0))
+        strategy.close('Long', qty=scaleOutQty, comment='TP 3:1')
+        tpHit := true
 
-    // Update last candle close for next bar
-    lastCandleClose := close
+        if showDebugLabels
+            label.new(bar_index, high, '💰 TAKE PROFIT\n' + str.tostring(scaleOutPercent, '#') + '% @ ' + str.tostring(takeProfitLevel, format.mintick),
+                      style=label.style_label_down, color=color.new(color.yellow, 0), textcolor=color.black, size=size.small)
 
-    // Apply stop loss
-    strategy.exit('Long Exit', 'Long', stop=currentStopLoss)
+    // Trail stop using initial candle size as increment
+    // Once price moves up by one candle size, move stop up by one candle size
+    if tpHit
+        // After TP hit, trail aggressively
+        priceMovement = highestPrice - entryPrice
+        numCandleSizes = math.floor(priceMovement / initialCandleSize)
 
-if strategy.position_size < 0  // Short position
-    // Check if candle continues in our direction and meets minimum size
-    candleContinues = close < lastCandleClose
-    candleMeetsMinSize = candleRange >= minTrailCandleSize
+        if numCandleSizes > 0
+            newStopLoss = entryPrice + ((numCandleSizes - 1) * initialCandleSize)  // Trail one candle behind
+            if newStopLoss > currentStopLoss
+                currentStopLoss := newStopLoss
+                if showDebugLabels
+                    label.new(bar_index, low, '📈 Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick),
+                              style=label.style_label_up, color=color.aqua, textcolor=color.black, size=size.tiny)
 
-    if candleContinues and candleMeetsMinSize
-        // Calculate new stop loss
-        if firstTrailMove
-            // First move: subtract tick offset for fees
-            currentStopLoss := lastCandleClose - (tickOffset * syminfo.mintick)
-            firstTrailMove := false
+    // Apply exit order
+    if enableFixedTP and not tpHit
+        strategy.exit('Long Exit', 'Long', stop=currentStopLoss, limit=takeProfitLevel)
+    else
+        strategy.exit('Long Exit', 'Long', stop=currentStopLoss)
 
-            if showDebugLabels
-                label.new(bar_index, high, '📉 1st Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick) + '\n(-' + str.tostring(tickOffset) + ' ticks)',
-                          style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.tiny)
-        else
-            // Subsequent moves: just use previous candle close
-            currentStopLoss := lastCandleClose
+// Short position management
+if strategy.position_size < 0 and tradeDirection == -1
+    // Update lowest price reached
+    if low < lowestPrice
+        lowestPrice := low
 
-            if showDebugLabels
-                label.new(bar_index, high, '📉 Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick),
-                          style=label.style_label_down, color=color.orange, textcolor=color.black, size=size.tiny)
+    // Check if we hit take profit and haven't scaled out yet
+    if enableFixedTP and low <= takeProfitLevel and not tpHit
+        // Scale out at TP
+        scaleOutQty = math.round(math.abs(strategy.position_size) * (scaleOutPercent / 100.0))
+        strategy.close('Short', qty=scaleOutQty, comment='TP 3:1')
+        tpHit := true
 
-    // Update last candle close for next bar
-    lastCandleClose := close
+        if showDebugLabels
+            label.new(bar_index, low, '💰 TAKE PROFIT\n' + str.tostring(scaleOutPercent, '#') + '% @ ' + str.tostring(takeProfitLevel, format.mintick),
+                      style=label.style_label_up, color=color.new(color.yellow, 0), textcolor=color.black, size=size.small)
 
-    // Apply stop loss
-    strategy.exit('Short Exit', 'Short', stop=currentStopLoss)
+    // Trail stop using initial candle size as increment
+    if tpHit
+        // After TP hit, trail aggressively
+        priceMovement = entryPrice - lowestPrice
+        numCandleSizes = math.floor(priceMovement / initialCandleSize)
+
+        if numCandleSizes > 0
+            newStopLoss = entryPrice - ((numCandleSizes - 1) * initialCandleSize)  // Trail one candle behind
+            if newStopLoss < currentStopLoss
+                currentStopLoss := newStopLoss
+                if showDebugLabels
+                    label.new(bar_index, high, '📉 Trail\nSL: ' + str.tostring(currentStopLoss, format.mintick),
+                              style=label.style_label_down, color=color.orange, textcolor=color.black, size=size.tiny)
+
+    // Apply exit order
+    if enableFixedTP and not tpHit
+        strategy.exit('Short Exit', 'Short', stop=currentStopLoss, limit=takeProfitLevel)
+    else
+        strategy.exit('Short Exit', 'Short', stop=currentStopLoss)
 
 // === Close Positions Outside Trading Hours ===
 if closeOutsideHours and not inTradingWindow
@@ -226,9 +287,13 @@ if isEODCloseTime
 if strategy.position_size == 0 and strategy.position_size[1] != 0
     entryPrice := na
     currentStopLoss := na
+    takeProfitLevel := na
+    initialCandleSize := na
     tradeDirection := 0
-    firstTrailMove := false
-    lastCandleClose := na
+    tpHit := false
+    entryCount := 0
+    highestPrice := na
+    lowestPrice := na
 
 // === Visual Reference ===
 // Plot entry signals
@@ -237,6 +302,9 @@ plotshape(triggerShort, title='Short Trigger', style=shape.triangledown, locatio
 
 // Plot stop loss line
 plot(strategy.position_size != 0 ? currentStopLoss : na, title='Stop Loss', color=color.red, linewidth=2, style=plot.style_linebr)
+
+// Plot take profit line
+plot(strategy.position_size != 0 and enableFixedTP and not tpHit ? takeProfitLevel : na, title='Take Profit', color=color.new(color.yellow, 0), linewidth=2, style=plot.style_linebr)
 
 // Plot trend EMA
 plot(enableTrendFilter ? trendEMA : na, title='Trend EMA', color=color.new(color.yellow, 0), linewidth=2)
