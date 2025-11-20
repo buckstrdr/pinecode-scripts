@@ -403,19 +403,21 @@ if short3
 
 // Rubber Band entries (Note: RB trades use simpler TP structure, no trailing)
 if rubberBandLong
-    if show1
-        stopLoss = low - (sess1StopLossMult * delta1)
-        session1TradeCount := session1TradeCount + 1
-    else if show2
-        stopLoss = low - (sess2StopLossMult * delta2)
-        session2TradeCount := session2TradeCount + 1
-    else if show3
-        stopLoss = low - (sess3StopLossMult * delta3)
-        session3TradeCount := session3TradeCount + 1
-
     currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
+    rbStopMult = show1 ? sess1StopLossMult : show2 ? sess2StopLossMult : sess3StopLossMult
+    stopLoss = low - (rbStopMult * currentDelta)
+
     strategy.entry(RB_LONG_ID, strategy.long, comment="RB_L")
     strategy.exit("RB_L_Exit", from_entry=RB_LONG_ID, limit=high + currentDelta, stop=stopLoss)
+
+    // Increment session counter
+    if show1
+        session1TradeCount := session1TradeCount + 1
+    else if show2
+        session2TradeCount := session2TradeCount + 1
+    else if show3
+        session3TradeCount := session3TradeCount + 1
+
     // Reset tracking since RB doesn't use trailing
     entryPrice := na
     tp2Level := na
@@ -423,19 +425,21 @@ if rubberBandLong
     currentTradeID := ""
 
 if rubberBandShort
-    if show1
-        stopLoss = high + (sess1StopLossMult * delta1)
-        session1TradeCount := session1TradeCount + 1
-    else if show2
-        stopLoss = high + (sess2StopLossMult * delta2)
-        session2TradeCount := session2TradeCount + 1
-    else if show3
-        stopLoss = high + (sess3StopLossMult * delta3)
-        session3TradeCount := session3TradeCount + 1
-
     currentDelta = show1 ? delta1 : show2 ? delta2 : delta3
+    rbStopMult = show1 ? sess1StopLossMult : show2 ? sess2StopLossMult : sess3StopLossMult
+    stopLoss = high + (rbStopMult * currentDelta)
+
     strategy.entry(RB_SHORT_ID, strategy.short, comment="RB_S")
     strategy.exit("RB_S_Exit", from_entry=RB_SHORT_ID, limit=low - currentDelta, stop=stopLoss)
+
+    // Increment session counter
+    if show1
+        session1TradeCount := session1TradeCount + 1
+    else if show2
+        session2TradeCount := session2TradeCount + 1
+    else if show3
+        session3TradeCount := session3TradeCount + 1
+
     // Reset tracking since RB doesn't use trailing
     entryPrice := na
     tp2Level := na
