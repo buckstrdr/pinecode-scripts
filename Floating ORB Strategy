@@ -18,7 +18,8 @@ tradingSession = input.session('0930-1600', title='Trading Hours', group='Time F
 closeOutsideHours = input.bool(false, title='Close Positions Outside Hours', group='Time Filter', tooltip='Close any open positions when outside trading hours')
 
 // Debug option
-showDebugLabels = input.bool(false, title='Show Debug Labels', group='Display', tooltip='Show debug information on chart')
+showDebugLabels = input.bool(true, title='Show Debug Labels', group='Display', tooltip='Show debug information on chart')
+showFailedConditions = input.bool(true, title='Show Failed Condition Labels', group='Display', tooltip='Show why trades did not trigger')
 
 // === Timeframe Check ===
 is5min = timeframe.isintraday and timeframe.multiplier == 5
@@ -39,6 +40,32 @@ candleIsBearish = close < open
 validCandleRange = candleRange >= minCandleRange and candleRange <= maxCandleRange
 triggerLong = is5min and candleIsBullish and volumeCondition and validCandleRange and inTradingWindow
 triggerShort = is5min and candleIsBearish and volumeCondition and validCandleRange and inTradingWindow
+
+// === Debug Failed Conditions ===
+if showFailedConditions and strategy.position_size == 0
+    // Check if we have a potential signal but missing one condition
+    potentialLong = candleIsBullish and (volumeCondition or validCandleRange or is5min or inTradingWindow)
+    potentialShort = candleIsBearish and (volumeCondition or validCandleRange or is5min or inTradingWindow)
+
+    if potentialLong and not triggerLong
+        debugText = '⚠️ LONG SIGNAL FAILED:\n'
+        debugText := debugText + 'Timeframe: ' + (is5min ? '✓' : '✗ NOT 5min') + '\n'
+        debugText := debugText + 'Bullish: ' + (candleIsBullish ? '✓' : '✗') + '\n'
+        debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗ ' + str.tostring(volume/volumeMA, '#.##') + 'x MA') + '\n'
+        debugText := debugText + 'Range: ' + (validCandleRange ? '✓' : '✗ ' + str.tostring(candleRange, '#.##') + ' pts') + '\n'
+        debugText := debugText + 'Min: ' + str.tostring(minCandleRange, '#.#') + ' Max: ' + str.tostring(maxCandleRange, '#.#') + '\n'
+        debugText := debugText + 'Time: ' + (inTradingWindow ? '✓' : '✗ Outside hours')
+        label.new(bar_index, high, debugText, style=label.style_label_down, color=color.new(color.orange, 0), textcolor=color.black, size=size.tiny)
+
+    if potentialShort and not triggerShort
+        debugText = '⚠️ SHORT SIGNAL FAILED:\n'
+        debugText := debugText + 'Timeframe: ' + (is5min ? '✓' : '✗ NOT 5min') + '\n'
+        debugText := debugText + 'Bearish: ' + (candleIsBearish ? '✓' : '✗') + '\n'
+        debugText := debugText + 'Volume: ' + (volumeCondition ? '✓' : '✗ ' + str.tostring(volume/volumeMA, '#.##') + 'x MA') + '\n'
+        debugText := debugText + 'Range: ' + (validCandleRange ? '✓ ' : '✗ ' + str.tostring(candleRange, '#.##') + ' pts') + '\n'
+        debugText := debugText + 'Min: ' + str.tostring(minCandleRange, '#.#') + ' Max: ' + str.tostring(maxCandleRange, '#.#') + '\n'
+        debugText := debugText + 'Time: ' + (inTradingWindow ? '✓' : '✗ Outside hours')
+        label.new(bar_index, low, debugText, style=label.style_label_up, color=color.new(color.orange, 0), textcolor=color.black, size=size.tiny)
 
 // === Track Position State ===
 var float entryPrice = na
