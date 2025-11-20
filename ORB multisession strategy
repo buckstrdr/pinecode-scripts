@@ -2,10 +2,8 @@
 // DISCLAIMER: This strategy is provided "as is" for educational purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
 strategy('ORB Multi-Session Strategy by BucksTRDR', overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, pyramiding=0, calc_on_every_tick=false, calc_on_order_fills=false)
 
-// === ORB Settings ===
-orbTotalTime = input.int(5, title='ORB total time (minutes)')
-
 // === SESSION 1 SETTINGS ===
+sess1OrbTime = input.int(5, title='S1: ORB Time (minutes)', minval=1, maxval=60, group='Session 1')
 sess1StopLossMult = input.float(1.0, title='S1: Stop Loss Multiplier', minval=0.1, step=0.1, group='Session 1', tooltip='Stop loss as multiple of OR range')
 sess1MaxTrades = input.int(1, title='S1: Max Trades', minval=1, maxval=10, group='Session 1')
 sess1MaxLosses = input.int(1, title='S1: Max Losses', minval=1, maxval=5, group='Session 1')
@@ -20,6 +18,7 @@ sess1TP2 = input.float(2.0, title='S1: TP2 Multiplier', minval=0.1, step=0.1, gr
 sess1TP3 = input.float(3.0, title='S1: TP3 Multiplier', minval=0.1, step=0.1, group='Session 1')
 
 // === SESSION 2 SETTINGS ===
+sess2OrbTime = input.int(5, title='S2: ORB Time (minutes)', minval=1, maxval=60, group='Session 2')
 sess2StopLossMult = input.float(1.0, title='S2: Stop Loss Multiplier', minval=0.1, step=0.1, group='Session 2', tooltip='Stop loss as multiple of OR range')
 sess2MaxTrades = input.int(1, title='S2: Max Trades', minval=1, maxval=10, group='Session 2')
 sess2MaxLosses = input.int(1, title='S2: Max Losses', minval=1, maxval=5, group='Session 2')
@@ -34,6 +33,7 @@ sess2TP2 = input.float(2.0, title='S2: TP2 Multiplier', minval=0.1, step=0.1, gr
 sess2TP3 = input.float(3.0, title='S2: TP3 Multiplier', minval=0.1, step=0.1, group='Session 2')
 
 // === SESSION 3 SETTINGS ===
+sess3OrbTime = input.int(5, title='S3: ORB Time (minutes)', minval=1, maxval=60, group='Session 3')
 sess3StopLossMult = input.float(1.0, title='S3: Stop Loss Multiplier', minval=0.1, step=0.1, group='Session 3', tooltip='Stop loss as multiple of OR range')
 sess3MaxTrades = input.int(1, title='S3: Max Trades', minval=1, maxval=10, group='Session 3')
 sess3MaxLosses = input.int(1, title='S3: Max Losses', minval=1, maxval=5, group='Session 3')
@@ -90,6 +90,11 @@ var float orb_low2 = na
 var float orb_high3 = na
 var float orb_low3 = na
 
+// === ORB Time Tracking ===
+var int session1StartTime = 0
+var int session2StartTime = 0
+var int session3StartTime = 0
+
 // === Session Display Flags ===
 var bool show1 = false
 var bool show2 = false
@@ -122,12 +127,17 @@ if sess1Enable
         orb_low1 := low
         session1TradeCount := 0  // Reset trade counter
         session1LossCount := 0   // Reset loss counter
+        session1StartTime := time  // Record session start time
     else
         orb_high1 := orb_high1[1]
         orb_low1 := orb_low1[1]
     if in_session1
-        orb_high1 := math.max(orb_high1, high)
-        orb_low1 := math.min(orb_low1, low)
+        // Calculate elapsed minutes since session start
+        elapsedMinutes = (time - session1StartTime) / (1000 * 60)
+        // Only update ORB during the specified time window
+        if elapsedMinutes <= sess1OrbTime
+            orb_high1 := math.max(orb_high1, high)
+            orb_low1 := math.min(orb_low1, low)
 
 if sess2Enable
     if is_first2
@@ -135,12 +145,17 @@ if sess2Enable
         orb_low2 := low
         session2TradeCount := 0  // Reset trade counter
         session2LossCount := 0   // Reset loss counter
+        session2StartTime := time  // Record session start time
     else
         orb_high2 := orb_high2[1]
         orb_low2 := orb_low2[1]
     if in_session2
-        orb_high2 := math.max(orb_high2, high)
-        orb_low2 := math.min(orb_low2, low)
+        // Calculate elapsed minutes since session start
+        elapsedMinutes = (time - session2StartTime) / (1000 * 60)
+        // Only update ORB during the specified time window
+        if elapsedMinutes <= sess2OrbTime
+            orb_high2 := math.max(orb_high2, high)
+            orb_low2 := math.min(orb_low2, low)
 
 if sess3Enable
     if is_first3
@@ -148,12 +163,17 @@ if sess3Enable
         orb_low3 := low
         session3TradeCount := 0  // Reset trade counter
         session3LossCount := 0   // Reset loss counter
+        session3StartTime := time  // Record session start time
     else
         orb_high3 := orb_high3[1]
         orb_low3 := orb_low3[1]
     if in_session3
-        orb_high3 := math.max(orb_high3, high)
-        orb_low3 := math.min(orb_low3, low)
+        // Calculate elapsed minutes since session start
+        elapsedMinutes = (time - session3StartTime) / (1000 * 60)
+        // Only update ORB during the specified time window
+        if elapsedMinutes <= sess3OrbTime
+            orb_high3 := math.max(orb_high3, high)
+            orb_low3 := math.min(orb_low3, low)
 
 // === Deltas ===
 delta1 = orb_high1 - orb_low1
