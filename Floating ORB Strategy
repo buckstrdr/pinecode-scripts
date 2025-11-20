@@ -1,6 +1,12 @@
 //@version=6
 // DISCLAIMER: This strategy is provided "as is" for educational and backtesting purposes only. BucksTRDR is not responsible for trading decisions made using this tool. Always do your own research and consult a financial professional.
-strategy('Floating ORB Strategy by BucksTRDR', overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.cash_per_contract, commission_value=2)
+strategy('Floating ORB Strategy by BucksTRDR', overlay=true,
+         initial_capital=10000,
+         default_qty_type=strategy.cash,
+         default_qty_value=10000,
+         commission_type=strategy.commission.percent,
+         commission_value=0.1,
+         slippage=2)
 
 // === Strategy Inputs ===
 volumeMALength = input.int(20, title='Volume MA Length', minval=1, group='Volume Settings', tooltip='Length for volume moving average')
@@ -84,8 +90,8 @@ if triggerLong and strategy.position_size == 0
     strategy.entry('Long', strategy.long)
 
     if showDebugLabels
-        label.new(bar_index, high, '🟢 LONG ENTRY\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
-                  style=label.style_label_down, color=color.green, textcolor=color.white, size=size.small)
+        label.new(bar_index, high, '🟢 LONG ENTRY CALLED\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(low, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
+                  style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=size.normal)
 
 if triggerShort and strategy.position_size == 0
     entryPrice := close
@@ -96,8 +102,8 @@ if triggerShort and strategy.position_size == 0
     strategy.entry('Short', strategy.short)
 
     if showDebugLabels
-        label.new(bar_index, low, '🔴 SHORT ENTRY\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
-                  style=label.style_label_up, color=color.red, textcolor=color.white, size=size.small)
+        label.new(bar_index, low, '🔴 SHORT ENTRY CALLED\nEntry: ' + str.tostring(close, format.mintick) + '\nSL: ' + str.tostring(high, format.mintick) + '\nVol: ' + str.tostring(volume/volumeMA, '#.##') + 'x\nRange: ' + str.tostring(candleRange, '#.##'),
+                  style=label.style_label_up, color=color.new(color.fuchsia, 0), textcolor=color.white, size=size.normal)
 
 // === Trailing Stop Logic ===
 if strategy.position_size > 0  // Long position
@@ -181,5 +187,12 @@ plotshape(triggerShort, title='Short Trigger', style=shape.triangledown, locatio
 // Plot stop loss line
 plot(strategy.position_size != 0 ? currentStopLoss : na, title='Stop Loss', color=color.red, linewidth=2, style=plot.style_linebr)
 
-// === Volume Reference ===
+// === Volume & Position Reference ===
 bgcolor(volumeCondition ? color.new(color.blue, 95) : na, title='High Volume Background')
+
+// Highlight when strategy has an active position
+bgcolor(strategy.position_size > 0 ? color.new(color.green, 90) : na, title='Long Position Active')
+bgcolor(strategy.position_size < 0 ? color.new(color.red, 90) : na, title='Short Position Active')
+
+// Plot a line at entry price when in position
+plot(strategy.position_size != 0 ? entryPrice : na, title='Entry Price', color=color.blue, linewidth=1, style=plot.style_linebr)
