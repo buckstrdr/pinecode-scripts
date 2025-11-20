@@ -28,18 +28,21 @@ trailWithSupertrend = input.bool(title='Trail Stop with Supertrend', defval=true
 atr2 = ta.sma(ta.tr, Periods)
 atr = changeATR ? ta.atr(Periods) : atr2
 
-// === Supertrend Calculation (exact v4 logic) ===
-up = src - Multiplier * atr
-up1 = nz(up[1], up)
-up := close[1] > up1 ? math.max(up, up1) : up
+// === Supertrend Calculation ===
+var float up = na
+var float dn = na
+var int trend = na
 
-dn = src + Multiplier * atr
-dn1 = nz(dn[1], dn)
-dn := close[1] < dn1 ? math.min(dn, dn1) : dn
+// Calculate basic bands
+upBasic = src - Multiplier * atr
+dnBasic = src + Multiplier * atr
 
-trend = 1
-trend := nz(trend[1], trend)
-trend := trend == -1 and close > dn1 ? 1 : trend == 1 and close < up1 ? -1 : trend
+// Apply smoothing logic
+up := na(up[1]) ? upBasic : (close[1] > up[1] ? math.max(upBasic, up[1]) : upBasic)
+dn := na(dn[1]) ? dnBasic : (close[1] < dn[1] ? math.min(dnBasic, dn[1]) : dnBasic)
+
+// Determine trend
+trend := na(trend[1]) ? 1 : (trend[1] == -1 and close > dn[1] ? 1 : (trend[1] == 1 and close < up[1] ? -1 : trend[1]))
 
 // === Signals ===
 buySignal = trend == 1 and trend[1] == -1
