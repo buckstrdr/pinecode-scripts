@@ -1,0 +1,40 @@
+# Volume-Weighted TEMA (VW-TEMA) Indicator â€“ Pine Script v5 Specification
+
+## Purpose
+Create a TradingView Pine Script v6 indicator that calculates and plots a **Volumeâ€‘Weighted Triple Exponential Moving Average (VWâ€‘TEMA)**, optionally including the EVWAP base series and Standard devistion ATR bands.
+
+## Inputs
+- length: int (default 50)
+- src: price source (default close)
+- showEvwap: bool (default true)
+- showBands: bool (default true)
+- atrLen: int (default 14)
+- atrMult: float (default 1.0)
+- lineWidth: int (default 2)
+
+## Calculations
+### EVWAP
+- pvEma = EMA(src * volume, length)
+- vEma  = EMA(volume, length)
+- evwap = pvEma / vEma
+
+### TEMA of EVWAP
+- e1 = EMA(evwap, length)
+- e2 = EMA(e1, length)
+- e3 = EMA(e2, length)
+- vwtema = 3*e1 - 3*e2 + e3
+
+### ATR Bands (optional)
+- atrValue  = ATR(atrLen)
+- upperBand = vwtema + atrMult * atrValue
+- lowerBand = vwtema - atrMult * atrValue
+
+## Plotting Requirements
+- Pine v6, overlay = true
+- Plot VW-TEMA (linewidth = lineWidth)
+- Plot EVWAP only if showEvwap = true
+- Plot ATR bands only if showBands = true
+- Fill between upper/lower ATR bands
+
+## Output
+A complete Pine Script v6 implementation exactly following this specification.
