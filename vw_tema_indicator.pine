@@ -13,6 +13,9 @@ showEvwap = input.bool(true, "Show EVWAP")
 showBands = input.bool(true, "Show ATR Bands")
 atrLen = input.int(14, "ATR Length", minval=1)
 atrMult = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1)
+showStdBands = input.bool(false, "Show Std Dev Bands")
+stdLen = input.int(20, "Std Dev Length", minval=1)
+stdMult = input.float(2.0, "Std Dev Multiplier", minval=0.1, step=0.1)
 lineWidth = input.int(2, "Line Width", minval=1, maxval=5)
 
 // ============================================================================
@@ -35,6 +38,11 @@ atrValue = ta.atr(atrLen)
 upperBand = vwtema + atrMult * atrValue
 lowerBand = vwtema - atrMult * atrValue
 
+// Standard Deviation Bands
+stdDev = ta.stdev(vwtema, stdLen)
+upperStdBand = vwtema + stdMult * stdDev
+lowerStdBand = vwtema - stdMult * stdDev
+
 // ============================================================================
 // PLOTTING
 // ============================================================================
@@ -46,8 +54,15 @@ plot(vwtema, "VW-TEMA", color=color.new(color.blue, 0), linewidth=lineWidth)
 plot(showEvwap ? evwap : na, "EVWAP", color=color.new(color.orange, 0), linewidth=1)
 
 // Plot ATR Bands (optional)
-upperPlot = plot(showBands ? upperBand : na, "Upper Band", color=color.new(color.green, 50), linewidth=1)
-lowerPlot = plot(showBands ? lowerBand : na, "Lower Band", color=color.new(color.red, 50), linewidth=1)
+upperPlot = plot(showBands ? upperBand : na, "Upper ATR Band", color=color.new(color.green, 50), linewidth=1)
+lowerPlot = plot(showBands ? lowerBand : na, "Lower ATR Band", color=color.new(color.red, 50), linewidth=1)
 
-// Fill between bands
-fill(upperPlot, lowerPlot, color=showBands ? color.new(color.blue, 90) : na, title="Band Fill")
+// Fill between ATR bands
+fill(upperPlot, lowerPlot, color=showBands ? color.new(color.blue, 90) : na, title="ATR Band Fill")
+
+// Plot Standard Deviation Bands (optional)
+upperStdPlot = plot(showStdBands ? upperStdBand : na, "Upper Std Dev Band", color=color.new(color.purple, 50), linewidth=1)
+lowerStdPlot = plot(showStdBands ? lowerStdBand : na, "Lower Std Dev Band", color=color.new(color.maroon, 50), linewidth=1)
+
+// Fill between Std Dev bands
+fill(upperStdPlot, lowerStdPlot, color=showStdBands ? color.new(color.purple, 90) : na, title="Std Dev Band Fill")
