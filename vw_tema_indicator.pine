@@ -1,0 +1,53 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © buckstrdr
+
+//@version=6
+indicator("Volume-Weighted TEMA (VW-TEMA)", shorttitle="VW-TEMA", overlay=true)
+
+// ============================================================================
+// INPUTS
+// ============================================================================
+length = input.int(50, "Length", minval=1)
+src = input.source(close, "Source")
+showEvwap = input.bool(true, "Show EVWAP")
+showBands = input.bool(true, "Show ATR Bands")
+atrLen = input.int(14, "ATR Length", minval=1)
+atrMult = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1)
+lineWidth = input.int(2, "Line Width", minval=1, maxval=5)
+
+// ============================================================================
+// CALCULATIONS
+// ============================================================================
+
+// EVWAP Calculation
+pvEma = ta.ema(src * volume, length)
+vEma = ta.ema(volume, length)
+evwap = pvEma / vEma
+
+// TEMA of EVWAP
+e1 = ta.ema(evwap, length)
+e2 = ta.ema(e1, length)
+e3 = ta.ema(e2, length)
+vwtema = 3 * e1 - 3 * e2 + e3
+
+// ATR Bands
+atrValue = ta.atr(atrLen)
+upperBand = vwtema + atrMult * atrValue
+lowerBand = vwtema - atrMult * atrValue
+
+// ============================================================================
+// PLOTTING
+// ============================================================================
+
+// Plot VW-TEMA
+plot(vwtema, "VW-TEMA", color=color.new(color.blue, 0), linewidth=lineWidth)
+
+// Plot EVWAP (optional)
+plot(showEvwap ? evwap : na, "EVWAP", color=color.new(color.orange, 0), linewidth=1)
+
+// Plot ATR Bands (optional)
+upperPlot = plot(showBands ? upperBand : na, "Upper Band", color=color.new(color.green, 50), linewidth=1)
+lowerPlot = plot(showBands ? lowerBand : na, "Lower Band", color=color.new(color.red, 50), linewidth=1)
+
+// Fill between bands
+fill(upperPlot, lowerPlot, color=showBands ? color.new(color.blue, 90) : na, title="Band Fill")
